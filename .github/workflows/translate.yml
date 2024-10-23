@@ -47,6 +47,7 @@ jobs:
         uses: gradle/gradle-build-action@v2
         with:
           arguments: translateProperties -PtargetLanguages=fr,de,es,hi
+          gradle-version: '7.0'  # Specify the Gradle version if the wrapper is not set up
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
 
