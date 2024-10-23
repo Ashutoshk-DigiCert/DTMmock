@@ -5,27 +5,23 @@ on:
     branches:
       - main
     paths:
-      - 'src/main/resources/messages_en.properties'
+      - 'src/main/resources/messages_en.properties'  # Specific path to the English properties file
 
 jobs:
   translate:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-
     steps:
-      - name: Checkout DTMmock Repository
+      - name: Checkout DTMmock repository
         uses: actions/checkout@v3
         with:
-          repository: Ashutoshk-DigiCert/DTMmock
-          token: ${{ secrets.WORKFLOW_TOKEN }}
           path: dtmmock
 
-      - name: Checkout GoogleTranslatePOC Repository
+      - name: Checkout GoogleTranslatePOC repository
         uses: actions/checkout@v3
         with:
           repository: Ashutoshk-DigiCert/GoogleTranslatePOC
-          token: ${{ secrets.WORKFLOW_TOKEN }}
           path: translator
 
       - name: Set up JDK 17
@@ -33,35 +29,34 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: maven
+          cache: 'gradle'
 
       - name: Setup Google Cloud Credentials
         run: |
-          echo '${{ secrets.GOOGLE_CREDENTIALS_JSON }}' > google-credentials.json
-          echo "GOOGLE_APPLICATION_CREDENTIALS=$PWD/google-credentials.json" >> $GITHUB_ENV
+          echo '${{ secrets.GOOGLE_CREDENTIALS }}' > ${{ github.workspace }}/translator/credentials.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=${{ github.workspace }}/translator/credentials.json" >> $GITHUB_ENV
 
-      - name: Copy Source Properties File
+      - name: Copy messages_en.properties to translator
         run: |
-          mkdir -p translator/src/main/resources
-          cp dtmmock/src/main/resources/messages_en.properties translator/src/main/resources/
+          mkdir -p ${{ github.workspace }}/translator/src/main/resources
+          cp ${{ github.workspace }}/dtmmock/src/main/resources/messages_en.properties ${{ github.workspace }}/translator/src/main/resources/
 
       - name: Build and Run Translator
+        working-directory: ${{ github.workspace }}/translator
         run: |
-          cd translator
-          ./mvnw clean package
-          java -jar target/google-translate-1.0-SNAPSHOT.jar fr de es hi
+          chmod +x gradlew
+          ./gradlew clean shadowJar
+          java -jar build/libs/GoogleTranslatePOC-0.0.1-SNAPSHOT-all.jar fr de es hi
 
-      - name: Copy Translated Files
+      - name: Copy translated files back to DTMmock
         run: |
-          cp translator/src/main/resources/messages_*.properties dtmmock/src/main/resources/
+          cp ${{ github.workspace }}/translator/src/main/resources/messages_*.properties ${{ github.workspace }}/dtmmock/src/main/resources/
 
-      - name: Commit and Push Changes
+      - name: Commit and push changes
+        working-directory: ${{ github.workspace }}/dtmmock
         run: |
-          cd dtmmock
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
           git add src/main/resources/messages_*.properties
-          git commit -m "Update translated properties files [skip ci]" || echo "No changes to commit"
-          git push origin main
-        env:
-          WORKFLOW_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
+          git commit -m "[ci skip] Update translated properties files" || echo "No changes to commit"
+          git push
