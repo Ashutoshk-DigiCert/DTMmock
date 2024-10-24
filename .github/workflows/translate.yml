@@ -50,7 +50,7 @@ jobs:
       - name: Build and run GoogleTranslatePOC
         working-directory: GoogleTranslatePOC
         run: |
-          ./gradlew translateProperties -PtargetLanguages=fr,de,es,hi
+          ./gradlew translateProperties -PtargetLanguages=de
         env:
           GOOGLE_APPLICATION_CREDENTIALS: google-credentials.json
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
