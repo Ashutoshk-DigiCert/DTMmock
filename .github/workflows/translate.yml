@@ -1,6 +1,7 @@
 name: Translate Properties
 
 on:
+  workflow_dispatch:  # Add this trigger
   push:
     branches:
       - main
