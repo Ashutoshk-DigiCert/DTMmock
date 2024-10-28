@@ -11,6 +11,7 @@ on:
 jobs:
   translate:
     runs-on: ubuntu-latest
+    # Rest of the workflow remains the same...
 
     steps:
       - name: Checkout DTMmock repository
