@@ -1,0 +1,40 @@
+<configuration>
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>logs/translate-service.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>logs/translate-service.%d{yyyy-MM-dd}.log</fileNamePattern>
+            <maxHistory>30</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE" />
+    </root>
+
+    <!-- Logger for com.example.GoogleTranslateService -->
+    <logger name="com.example.GoogleTranslateService" level="INFO">
+        <appender-ref ref="FILE" />
+    </logger>
+
+
+    <logger name="com.example.TranslationService" level="INFO">
+        <appender-ref ref="FILE" />
+    </logger>
+
+    <logger name="com.example.GlossaryManager" level="INFO">
+        <appender-ref ref="FILE" />
+    </logger>
+
+    <logger name="CONSOLE" level="INFO">
+        <appender-ref ref="CONSOLE" />
+    </logger>
+</configuration>

@@ -1,9 +1,19 @@
 plugins {
     id 'java'
+    id 'application'
+    id 'com.github.johnrengelman.shadow' version '7.1.2'
 }
 
-group = 'com.gtp_demo_java'
-version = '1.0-SNAPSHOT'
+def getProps() {
+    def props = new Properties()
+    file("src/main/resources/application.properties").withInputStream { props.load(it) }
+    return props
+}
+def props = getProps()
+
+group = props.getProperty('project.group')
+version = '0.0.1-SNAPSHOT'
+
 java {
     sourceCompatibility = JavaVersion.VERSION_17
     targetCompatibility = JavaVersion.VERSION_17
@@ -14,10 +24,230 @@ repositories {
 }
 
 dependencies {
-    testImplementation platform('org.junit:junit-bom:5.10.0')
-    testImplementation 'org.junit.jupiter:junit-jupiter'
+    implementation 'com.google.cloud:google-cloud-translate:2.49.0'
+    implementation 'com.google.auth:google-auth-library-oauth2-http:1.16.0'
+    implementation 'com.google.cloud:google-cloud-storage:2.19.0'
+    implementation 'org.slf4j:slf4j-api:1.7.32'
+    implementation 'ch.qos.logback:logback-classic:1.2.6'
 }
 
-test {
-    useJUnitPlatform()
+application {
+    mainClass = props.getProperty('project.mainClass')
+}
+
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
+
+tasks.withType(Javadoc) {
+    options.encoding = 'UTF-8'
+}
+
+shadowJar {
+    mergeServiceFiles()
+    manifest {
+        attributes 'Main-Class': props.getProperty('project.mainClass')
+    }
+}
+
+def getCredentialsPath() {
+    def envCreds = System.getenv('GOOGLE_APPLICATION_CREDENTIALS')
+    if (envCreds) {
+        def credsFile = file(envCreds)
+        if (credsFile.exists()) {
+            return envCreds
+        }
+        return file(envCreds).absolutePath
+    }
+    return props.getProperty('google.credentials.default.path')
+}
+
+def getGlossaryPath(String targetLanguage) {
+    def props = getProps()
+    def basePath = props.getProperty('glossary.base.path')
+    def format = props.getProperty('glossary.file.format')
+    return "${basePath}/${String.format(format, targetLanguage)}"
+}
+
+static def validateLanguageCode(String langCode) {
+    if (!langCode.matches('^[a-zA-Z]{2,3}(-[a-zA-Z]{2,4})?$')) {
+        throw new org.gradle.api.GradleException("Invalid language code format: ${langCode}")
+    }
+}
+
+tasks.register('translateProperties', JavaExec) {
+    group = 'Translation'
+    description = 'Translates application.properties file to target languages'
+    mainClass = props.getProperty('project.mainClass')
+    classpath = sourceSets.main.runtimeClasspath
+
+    doFirst {
+        def targetLanguages = project.findProperty('targetLanguages')
+        if (!targetLanguages) {
+            throw new org.gradle.api.GradleException("Target languages not specified. Use -PtargetLanguages=<language_code1,language_code2,...>")
+        }
+
+        def credentialsPath = getCredentialsPath()
+        environment 'GOOGLE_APPLICATION_CREDENTIALS', credentialsPath
+
+        if (!file(credentialsPath).exists()) {
+            throw new org.gradle.api.GradleException("Google credentials file not found at: ${credentialsPath}. Working directory: ${projectDir}")
+        }
+
+        def languages = targetLanguages.split(',').toList()
+        languages.each { lang -> validateLanguageCode(lang as String) }
+
+        args = languages
+    }
+
+    systemProperty "file.encoding", "UTF-8"
+    jvmArgs '-Dfile.encoding=UTF-8'
+}
+
+tasks.register('translatePropertiesDelta', JavaExec) {
+    group = 'Translation'
+    description = 'Translates application.properties file to target languages with delta translation'
+    mainClass = props.getProperty('project.mainClass')
+    classpath = sourceSets.main.runtimeClasspath
+
+    doFirst {
+        def targetLanguages = project.findProperty('targetLanguages')
+        if (!targetLanguages) {
+            throw new org.gradle.api.GradleException("Target languages not specified. Use -PtargetLanguages=<language_code1,language_code2,...>")
+        }
+
+        def previousFile = project.findProperty('previousFile')
+        if (!previousFile) {
+            throw new org.gradle.api.GradleException("Previous file not specified. Use -PpreviousFile=<path_to_previous_file>")
+        }
+
+        def credentialsPath = getCredentialsPath()
+        environment 'GOOGLE_APPLICATION_CREDENTIALS', credentialsPath
+
+        if (!file(credentialsPath).exists()) {
+            throw new org.gradle.api.GradleException("Google credentials file not found at: ${credentialsPath}")
+        }
+
+        def languages = targetLanguages.split(',').toList()
+        languages.each { lang -> validateLanguageCode(lang) }
+
+        def fullArgs = []
+        languages.each { lang ->
+            fullArgs.add(lang)
+        }
+
+        fullArgs.add('--previous')
+        fullArgs.add(previousFile)
+
+        println "Processing languages: ${languages.join(', ')}"
+        println "Previous file: ${previousFile}"
+
+        args = fullArgs
+    }
+
+    systemProperty "file.encoding", "UTF-8"
+    jvmArgs '-Dfile.encoding=UTF-8'
+}
+
+tasks.register('deleteGlossariesId', JavaExec) {
+    group = 'Translation'
+    description = 'Deletes glossaries for specified target languages'
+    mainClass = props.getProperty('project.mainClass')
+    classpath = sourceSets.main.runtimeClasspath
+
+    doFirst {
+        def targetLanguages = project.findProperty('targetLanguages')
+        if (!targetLanguages) {
+            throw new org.gradle.api.GradleException("Target languages not specified. Use -PtargetLanguages=<language_code1,language_code2,...>")
+        }
+
+        def credentialsPath = getCredentialsPath()
+        environment 'GOOGLE_APPLICATION_CREDENTIALS', credentialsPath
+
+        if (!file(credentialsPath).exists()) {
+            throw new org.gradle.api.GradleException("Google credentials file not found at: ${credentialsPath}. Working directory: ${projectDir}")
+        }
+
+        def languages = targetLanguages.split(',').toList()
+        languages.each { lang -> validateLanguageCode(lang) }
+
+        args = languages + ['deleteGlossary']
+    }
+
+    systemProperty "file.encoding", "UTF-8"
+    jvmArgs '-Dfile.encoding=UTF-8'
+}
+
+tasks.register('uploadGlossaryFile', JavaExec) {
+    group = 'Translation'
+    description = 'Uploads glossary files and triggers retranslation for multiple languages'
+    mainClass = props.getProperty('project.mainClass')
+    classpath = sourceSets.main.runtimeClasspath
+
+    doFirst {
+        def targetLanguages = project.findProperty('targetLanguages')
+        if (!targetLanguages) {
+            targetLanguages = project.findProperty('targetLanguage')
+            if (!targetLanguages) {
+                throw new org.gradle.api.GradleException("Target languages must be specified. Use -PtargetLanguages=<lang1,lang2,...> or -PtargetLanguage=<lang>")
+            }
+        }
+
+        def languages = targetLanguages.split(',').toList()
+        languages.each { lang ->
+            validateLanguageCode(lang)
+            def glossaryPath = getGlossaryPath(lang)
+            if (!file(glossaryPath).exists()) {
+                logger.warn("Glossary file not found at: ${glossaryPath}. Skipping Upload for language: ${lang}")
+                return
+            }
+        }
+
+        def credentialsPath = getCredentialsPath()
+        environment 'GOOGLE_APPLICATION_CREDENTIALS', credentialsPath
+
+        if (!file(credentialsPath).exists()) {
+            throw new org.gradle.api.GradleException("Google credentials file not found at: ${credentialsPath}")
+        }
+
+        println "Target Languages: ${languages.join(', ')}"
+        println "Credentials Path: ${credentialsPath}"
+
+        def fullArgs = []
+        languages.each { lang ->
+            fullArgs.addAll([lang, 'updateGlossary', getGlossaryPath(lang)])
+        }
+        args = fullArgs
+    }
+
+    systemProperty "file.encoding", "UTF-8"
+    jvmArgs '-Dfile.encoding=UTF-8'
+}
+
+tasks.register('runJar', JavaExec) {
+    group = 'Execution'
+    description = 'Runs the shaded JAR file with specified arguments'
+    classpath = files(tasks.shadowJar)
+
+    doFirst {
+        def targetLanguages = project.findProperty('targetLanguages')
+        if (!targetLanguages) {
+            throw new org.gradle.api.GradleException("Target languages not specified. Use -PtargetLanguages=<language_code1,language_code2,...>")
+        }
+
+        def credentialsPath = getCredentialsPath()
+        environment 'GOOGLE_APPLICATION_CREDENTIALS', credentialsPath
+
+        if (!file(credentialsPath).exists()) {
+            throw new org.gradle.api.GradleException("Google credentials file not found at: ${credentialsPath}. Working directory: ${projectDir}")
+        }
+
+        def languages = targetLanguages.split(',').toList()
+        languages.each { lang -> validateLanguageCode(lang) }
+
+        args = languages
+    }
+
+    systemProperty "file.encoding", "UTF-8"
+    jvmArgs '-Dfile.encoding=UTF-8'
 }

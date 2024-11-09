@@ -1,31 +1,24 @@
-name: Translate Properties
+name: Translation Workflow
 
 on:
-  workflow_dispatch:
-  push:
+  pull_request:
     branches:
-      - main
+      - master
     paths:
       - 'src/main/resources/messages_en.properties'
+      - 'src/main/resources/glossaries/**'
 
 jobs:
-  translate:
+  process-translations:
     runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
 
     steps:
-      - name: Checkout DTMmock repository
+      - name: Checkout repository
         uses: actions/checkout@v3
         with:
-          repository: Ashutoshk-DigiCert/DTMmock
-          path: DTMmock
-          token: ${{ secrets.WORKFLOW_TOKEN }}
-
-      - name: Checkout GoogleTranslatePOC repository
-        uses: actions/checkout@v3
-        with:
-          repository: Ashutoshk-DigiCert/GoogleTranslatePOC
-          path: GoogleTranslatePOC
-          token: ${{ secrets.WORKFLOW_TOKEN }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up JDK 17
         uses: actions/setup-java@v3
@@ -34,37 +27,54 @@ jobs:
           java-version: '17'
 
       - name: Setup Google Cloud credentials
-        working-directory: GoogleTranslatePOC
         run: |
           echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}' > google-credentials.json
 
-      - name: Copy messages_en.properties
+      - name: Check for changes in messages_en.properties
+        id: check_changes
         run: |
-          cp DTMmock/src/main/resources/messages_en.properties GoogleTranslatePOC/src/main/resources/messages_en.properties
+          CHANGED=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | grep -c "src/main/resources/messages_en.properties" || true)
+          echo "changed=$CHANGED" >> $GITHUB_OUTPUT
+
+      - name: Check for changes in glossaries
+        id: check_glossaries
+        run: |
+          GLOSSARY_CHANGED=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | grep -c "src/main/resources/glossaries/" || true)
+          echo "changed=$GLOSSARY_CHANGED" >> $GITHUB_OUTPUT
 
       - name: Set up Gradle
-        working-directory: GoogleTranslatePOC
         run: |
-          gradle wrapper
           chmod +x gradlew
 
-      - name: Build and run GoogleTranslatePOC
-        working-directory: GoogleTranslatePOC
+      - name: Update glossaries if changed
+        if: steps.check_glossaries.outputs.changed != '0'
         run: |
-          ./gradlew translateProperties -PtargetLanguages=hi
+          ./gradlew uploadGlossaryFile -PtargetLanguages=hi,fr,ru
         env:
           GOOGLE_APPLICATION_CREDENTIALS: google-credentials.json
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
 
-      - name: Copy translated files back
+      - name: Run translations if messages_en.properties changed
+        if: steps.check_changes.outputs.changed != '0'
         run: |
-          cp GoogleTranslatePOC/src/main/resources/messages_*.properties DTMmock/src/main/resources/
-
-      - name: Commit and push translated files
-        working-directory: DTMmock
-        run: |
+          BRANCH_NAME="translations_${GITHUB_SHA:0:7}"
+          git checkout -b $BRANCH_NAME
+          
+          ./gradlew translateProperties -PtargetLanguages=hi,fr,ru
+          
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
           git add src/main/resources/messages_*.properties
-          git commit -m "Auto-translate properties files [skip ci]"
-          git push https://${{ secrets.WORKFLOW_TOKEN }}@github.com/Ashutoshk-DigiCert/DTMmock.git HEAD:main
+          git commit -m "Auto-translate properties files"
+          git push origin $BRANCH_NAME
+          
+          gh pr create \
+            --base ${{ github.event.pull_request.head.ref }} \
+            --head $BRANCH_NAME \
+            --title "Automated translations for PR #${{ github.event.pull_request.number }}" \
+            --body "This PR contains automated translations generated from messages_en.properties changes."
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GOOGLE_APPLICATION_CREDENTIALS: google-credentials.json
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
