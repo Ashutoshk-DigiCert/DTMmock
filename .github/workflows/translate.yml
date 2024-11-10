@@ -66,11 +66,9 @@ jobs:
       - name: Run translations if messages_en.properties changed
         if: steps.check_changes.outputs.changed != '0'
         run: |
-          # Assign the pull request head ref to a variable
           EPIC_BRANCH="${GITHUB_HEAD_REF}"
           TIMESTAMP="${{ steps.timestamp.outputs.timestamp }}"
 
-          # Branch naming format: i18n/epic-branch-name/timestamp
           BRANCH_NAME="i18n/${EPIC_BRANCH}/${TIMESTAMP}"
           git checkout -b $BRANCH_NAME
 
@@ -79,9 +77,7 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-          git add src/main/resources/messages_*.properties
-
-          # Detailed commit message
+          git add -A  # Stage all changes to avoid uncommitted changes warning
           git commit -m "🌐 Automated translations for ${EPIC_BRANCH}
 
           - Source PR: #${{ github.event.pull_request.number }}
@@ -90,7 +86,6 @@ jobs:
 
           git push origin $BRANCH_NAME
 
-          # Create PR with detailed information and labels
           gh pr create \
             --base "${EPIC_BRANCH}" \
             --head $BRANCH_NAME \
