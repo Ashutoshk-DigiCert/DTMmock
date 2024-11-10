@@ -66,9 +66,9 @@ jobs:
       - name: Run translations if messages_en.properties changed
         if: steps.check_changes.outputs.changed != '0'
         run: |
-          # Branch naming format: i18n/epic-branch-name/timestamp
-          BRANCH_NAME="i18n/${github.event.pull_request.head.ref}/${{ steps.timestamp.outputs.timestamp }}"
-          git checkout -b $BRANCH_NAME
+          EPIC_BRANCH="${github.event.pull_request.head.ref}"
+          BRANCH_NAME="i18n/${EPIC_BRANCH}/${{ steps.timestamp.outputs.timestamp }}"
+          git checkout -b "$BRANCH_NAME"
 
           ./gradlew translatePropertiesDelta -PtargetLanguages=hi -PpreviousFile=src/main/resources/messages_en.properties.bak
 
