@@ -155,7 +155,7 @@ public class GlossaryManager {
         }
     }
 
-    private void createGlossary(TranslationServiceClient client, LocationName parent,
+    public void createGlossary(TranslationServiceClient client, LocationName parent,
                                 String targetLanguage) throws IOException {
         logger.info("=== Starting Glossary Creation for {} ===", targetLanguage);
 

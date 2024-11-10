@@ -48,15 +48,10 @@ public class TranslationService {
             logger.info("Glossary status for {}: {}", targetLanguage, glossaryExists ? "found" : "not found");
 
             if (!glossaryExists) {
-                logger.info("Glossary not found. Attempting to create glossary for language: {}", targetLanguage);
+                logger.info("Glossary not found. Creating new glossary for language: {}", targetLanguage);
                 try {
                     GlossaryManager glossaryManager = new GlossaryManager(configManager);
-                    String glossaryFilePath = configManager.getConfig().getProperty("glossary.base.path") + "/" +
-                            String.format(configManager.getConfig().getProperty("glossary.file.format"), targetLanguage);
-
-                    glossaryManager.updateGlossary(glossaryFilePath, targetLanguage);
-                    glossaryExists = true;
-                    logger.info("Successfully created glossary for language: {}", targetLanguage);
+                    glossaryExists = createGlossaryForTranslation(glossaryManager, client, parent, targetLanguage);
                 } catch (Exception e) {
                     logger.warn("Failed to create glossary for language {}: {}. Proceeding with translation without glossary.",
                             targetLanguage, e.getMessage());
@@ -85,6 +80,19 @@ public class TranslationService {
         }
 
         return translatedEntries;
+    }
+
+    private boolean createGlossaryForTranslation(GlossaryManager glossaryManager, TranslationServiceClient client,
+                                                 LocationName parent, String targetLanguage) throws IOException {
+        try {
+            logger.info("Attempting to create glossary for language: {}", targetLanguage);
+            glossaryManager.createGlossary(client, parent, targetLanguage);
+            logger.info("Successfully created glossary for language: {}", targetLanguage);
+            return true;
+        } catch (Exception e) {
+            logger.error("Failed to create glossary for language {}: {}", targetLanguage, e.getMessage());
+            return false;
+        }
     }
 
     private boolean checkGlossaryExists(TranslationServiceClient client, String glossaryName) {
@@ -141,34 +149,11 @@ public class TranslationService {
 
             } catch (Exception e) {
                 logger.error("Failed to translate property: {}", entry.key, e);
-                translatedEntries.add(entry); // Fallback to original entry
+                translatedEntries.add(entry);
             }
         }
     }
 
-    private void processPropertyEntry(PropertyEntry entry, List<PropertyEntry> modifiedEntries,
-                                      List<PropertyEntry> translatedEntries, Map<String, PropertyEntry> existingTranslationsMap,
-                                      TranslationServiceClient client, LocationName parent, String targetLanguage,
-                                      boolean glossaryExists, String glossaryName) {
-
-        MDC.put("propertyKey", entry.key);
-        logger.debug("Processing property entry: {}", entry.key);
-
-        boolean isModified = modifiedEntries.stream()
-                .anyMatch(e -> e.key.equals(entry.key));
-
-        if (existingTranslationsMap.isEmpty()) {
-            translateAndAddEntry(entry, translatedEntries, client, parent, targetLanguage, glossaryExists, glossaryName);
-        } else if (isModified || !existingTranslationsMap.containsKey(entry.key)) {
-            logger.info("Translating modified/new entry: {}", entry.key);
-            translateAndAddEntry(entry, translatedEntries, client, parent, targetLanguage, glossaryExists, glossaryName);
-        } else {
-            logger.debug("Using existing translation for: {}", entry.key);
-            translatedEntries.add(existingTranslationsMap.get(entry.key));
-        }
-
-        MDC.remove("propertyKey");
-    }
 
     private void translateAndAddEntry(PropertyEntry entry, List<PropertyEntry> translatedEntries,
                                       TranslationServiceClient client, LocationName parent,
@@ -190,33 +175,78 @@ public class TranslationService {
         }
     }
 
+
     private String translateValueWithGlossary(TranslationServiceClient client, LocationName parent,
                                               String value, String targetLanguage, String glossaryName) {
-        logger.debug("Translating with glossary - Length: {}, Target: {}", value.length(), targetLanguage);
-
-        int separatorIndex = value.indexOf('=');
-        String key = value.substring(0, separatorIndex + 1);
-        String contentToTranslate = value.substring(separatorIndex + 1);
-
-        String cleanContent = cleanContentForTranslation(contentToTranslate);
-        logger.trace("Cleaned content for translation: {}", cleanContent);
-
-        TranslateTextGlossaryConfig glossaryConfig = TranslateTextGlossaryConfig.newBuilder()
-                .setGlossary(glossaryName)
-                .build();
-
-        TranslateTextRequest request = buildTranslationRequest(parent, targetLanguage, cleanContent, glossaryConfig);
+        logger.debug("Attempting translation with glossary - Length: {}, Target: {}", value.length(), targetLanguage);
 
         try {
+            int separatorIndex = value.indexOf('=');
+            String key = value.substring(0, separatorIndex + 1);
+            String contentToTranslate = value.substring(separatorIndex + 1);
+
+            String cleanContent = cleanContentForTranslation(contentToTranslate);
+            logger.trace("Cleaned content for translation: {}", cleanContent);
+
+            TranslateTextGlossaryConfig glossaryConfig = TranslateTextGlossaryConfig.newBuilder()
+                    .setGlossary(glossaryName)
+                    .build();
+
+            TranslateTextRequest request = buildTranslationRequest(parent, targetLanguage, cleanContent, glossaryConfig);
+
             TranslateTextResponse response = client.translateText(request);
             String translatedText = response.getGlossaryTranslations(0).getTranslatedText().trim();
             logger.debug("Successfully translated text with glossary");
             return formatTranslatedText(key, contentToTranslate, translatedText);
+
         } catch (Exception e) {
-            logger.error("Glossary translation failed: {}", e.getMessage(), e);
-            throw e;
+            logger.info("Proceeding with standard translation for {} as glossary is not available", targetLanguage);
+            return translateValueWithoutGlossary(client, parent, value, targetLanguage);
         }
     }
+
+// Also modify the translateProperties method to handle glossary checks better:
+
+    private void processPropertyEntry(PropertyEntry entry, List<PropertyEntry> modifiedEntries,
+                                      List<PropertyEntry> translatedEntries, Map<String, PropertyEntry> existingTranslationsMap,
+                                      TranslationServiceClient client, LocationName parent, String targetLanguage,
+                                      boolean glossaryExists, String glossaryName) {
+
+        MDC.put("propertyKey", entry.key);
+        logger.debug("Processing property entry: {}", entry.key);
+
+        try {
+            boolean isModified = modifiedEntries.stream()
+                    .anyMatch(e -> e.key.equals(entry.key));
+
+            if (existingTranslationsMap.isEmpty()) {
+                if (glossaryExists) {
+                    translateAndAddEntry(entry, translatedEntries, client, parent, targetLanguage, true, glossaryName);
+                } else {
+                    logger.info("No glossary available for {}, proceeding with standard translation", targetLanguage);
+                    translateAndAddEntry(entry, translatedEntries, client, parent, targetLanguage, false, null);
+                }
+            } else if (isModified || !existingTranslationsMap.containsKey(entry.key)) {
+                logger.info("Translating modified/new entry: {}", entry.key);
+                if (glossaryExists) {
+                    translateAndAddEntry(entry, translatedEntries, client, parent, targetLanguage, true, glossaryName);
+                } else {
+                    logger.info("No glossary available for {}, proceeding with standard translation", targetLanguage);
+                    translateAndAddEntry(entry, translatedEntries, client, parent, targetLanguage, false, null);
+                }
+            } else {
+                logger.debug("Using existing translation for: {}", entry.key);
+                translatedEntries.add(existingTranslationsMap.get(entry.key));
+            }
+        } catch (Exception e) {
+            logger.error("Error processing entry {}: {}. Using standard translation as fallback.",
+                    entry.key, e.getMessage());
+            translateAndAddEntry(entry, translatedEntries, client, parent, targetLanguage, false, null);
+        } finally {
+            MDC.remove("propertyKey");
+        }
+    }
+
 
     private String translateValueWithoutGlossary(TranslationServiceClient client, LocationName parent,
                                                  String value, String targetLanguage) {
