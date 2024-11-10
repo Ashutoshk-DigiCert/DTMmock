@@ -13,15 +13,17 @@ jobs:
   process-translations:
     runs-on: ubuntu-latest
     if: |
-      github.event_name == 'pull_request' && 
-      github.event.pull_request.base.ref == 'main' && 
-      !startsWith(github.head_ref, 'translations/') && 
-      !contains(github.event.pull_request.title, '🌐') && 
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.base.ref == 'main' &&
+      !startsWith(github.head_ref, 'translations/') &&
+      !contains(github.event.pull_request.title, '🌐') &&
       !contains(github.event.pull_request.body, 'Automated Translation PR') &&
       github.event.pull_request.user.login != 'github-actions[bot]' &&
       !contains(github.event.pull_request.head.ref, 'translations/') &&
       github.actor != 'github-actions[bot]' &&
-      !contains(github.event.pull_request.labels.*.name, 'automated-translation')
+      !contains(github.event.pull_request.labels.*.name, 'automated-translation') &&
+      github.event.pull_request.merged != true
+
 
     steps:
       - name: Checkout repository
@@ -87,7 +89,7 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
           cp src/main/resources/messages_en.properties src/main/resources/messages_en.properties.bak
-          
+
           git add src/main/resources/messages_*.properties
           git add src/main/resources/messages_en.properties.bak
 
