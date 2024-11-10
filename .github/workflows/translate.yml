@@ -15,7 +15,8 @@ jobs:
     if: |
       github.event_name == 'pull_request' && 
       github.event.pull_request.base.ref == 'main' && 
-      !startsWith(github.head_ref, 'translations/')
+      !startsWith(github.head_ref, 'translations/') && 
+      !contains(github.event.pull_request.title, '🌐 Translations for')
 
     steps:
       - name: Checkout repository
