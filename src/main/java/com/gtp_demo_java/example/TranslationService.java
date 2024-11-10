@@ -205,7 +205,7 @@ public class TranslationService {
         }
     }
 
-// Also modify the translateProperties method to handle glossary checks better:
+    private final Map<String, Boolean> glossaryAvailabilityLogged = new HashMap<>();
 
     private void processPropertyEntry(PropertyEntry entry, List<PropertyEntry> modifiedEntries,
                                       List<PropertyEntry> translatedEntries, Map<String, PropertyEntry> existingTranslationsMap,
@@ -223,7 +223,11 @@ public class TranslationService {
                 if (glossaryExists) {
                     translateAndAddEntry(entry, translatedEntries, client, parent, targetLanguage, true, glossaryName);
                 } else {
-                    logger.info("No glossary available for {}, proceeding with standard translation", targetLanguage);
+                    // Log only once per language
+                    if (!glossaryAvailabilityLogged.containsKey(targetLanguage)) {
+                        logger.info("No glossary available for {}, proceeding with standard translation", targetLanguage);
+                        glossaryAvailabilityLogged.put(targetLanguage, true);
+                    }
                     translateAndAddEntry(entry, translatedEntries, client, parent, targetLanguage, false, null);
                 }
             } else if (isModified || !existingTranslationsMap.containsKey(entry.key)) {
@@ -231,7 +235,11 @@ public class TranslationService {
                 if (glossaryExists) {
                     translateAndAddEntry(entry, translatedEntries, client, parent, targetLanguage, true, glossaryName);
                 } else {
-                    logger.info("No glossary available for {}, proceeding with standard translation", targetLanguage);
+                    // Log only once per language
+                    if (!glossaryAvailabilityLogged.containsKey(targetLanguage)) {
+                        logger.info("No glossary available for {}, proceeding with standard translation", targetLanguage);
+                        glossaryAvailabilityLogged.put(targetLanguage, true);
+                    }
                     translateAndAddEntry(entry, translatedEntries, client, parent, targetLanguage, false, null);
                 }
             } else {
@@ -246,6 +254,7 @@ public class TranslationService {
             MDC.remove("propertyKey");
         }
     }
+
 
 
     private String translateValueWithoutGlossary(TranslationServiceClient client, LocationName parent,
