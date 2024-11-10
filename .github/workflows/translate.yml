@@ -19,7 +19,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.WORKFLOW_TOKEN }}
 
       - name: Set up JDK 17
         uses: actions/setup-java@v3
@@ -50,7 +50,7 @@ jobs:
       - name: Update glossaries if changed
         if: steps.check_glossaries.outputs.changed != '0'
         run: |
-          ./gradlew uploadGlossaryFile -PtargetLanguages=hi
+          ./gradlew uploadGlossaryFile -PtargetLanguages=hi,fr,ru
         env:
           GOOGLE_APPLICATION_CREDENTIALS: google-credentials.json
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
@@ -61,7 +61,7 @@ jobs:
           BRANCH_NAME="translations_${GITHUB_SHA:0:7}"
           git checkout -b $BRANCH_NAME
 
-          ./gradlew translateProperties -PtargetLanguages=hi
+          ./gradlew translateProperties -PtargetLanguages=hi,fr,ru
           
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
@@ -76,6 +76,6 @@ jobs:
             --title "Automated translations for PR #${{ github.event.pull_request.number }}" \
             --body "This PR contains automated translations generated from messages_en.properties changes."
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
           GOOGLE_APPLICATION_CREDENTIALS: google-credentials.json
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
