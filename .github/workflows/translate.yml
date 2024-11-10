@@ -18,7 +18,11 @@ jobs:
       !startsWith(github.head_ref, 'translations/') && 
       !contains(github.event.pull_request.title, '🌐') && 
       !contains(github.event.pull_request.body, 'Automated Translation PR') &&
-      github.event.pull_request.user.login != 'github-actions[bot]'
+      github.event.pull_request.user.login != 'github-actions[bot]' &&
+      !contains(github.event.pull_request.head.ref, 'translations/') &&
+      github.actor != 'github-actions[bot]' &&
+      !contains(github.event.pull_request.labels.*.name, 'automated-translation')
+
 
     steps:
       - name: Checkout repository
