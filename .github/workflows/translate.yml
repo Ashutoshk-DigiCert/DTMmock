@@ -2,6 +2,7 @@ name: Translation Workflow
 
 on:
   pull_request:
+    types: [opened, synchronize]
     branches:
       - master
     paths:
@@ -11,7 +12,7 @@ on:
 jobs:
   process-translations:
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'epic/') && github.event.pull_request.base.ref == 'master'
 
     steps:
       - name: Checkout repository
@@ -59,7 +60,7 @@ jobs:
         run: |
           BRANCH_NAME="translations_${GITHUB_SHA:0:7}"
           git checkout -b $BRANCH_NAME
-          
+
           ./gradlew translateProperties -PtargetLanguages=hi,fr,ru
           
           git config --global user.name "github-actions[bot]"
@@ -70,7 +71,7 @@ jobs:
           git push origin $BRANCH_NAME
           
           gh pr create \
-            --base ${{ github.event.pull_request.head.ref }} \
+            --base "${{ github.event.pull_request.head.ref }}" \
             --head $BRANCH_NAME \
             --title "Automated translations for PR #${{ github.event.pull_request.number }}" \
             --body "This PR contains automated translations generated from messages_en.properties changes."
