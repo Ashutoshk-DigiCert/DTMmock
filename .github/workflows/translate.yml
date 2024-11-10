@@ -22,8 +22,8 @@ jobs:
       !contains(github.event.pull_request.head.ref, 'translations/') &&
       github.actor != 'github-actions[bot]' &&
       !contains(github.event.pull_request.labels.*.name, 'automated-translation') &&
-      github.event.pull_request.merged != true &&
-      !startsWith(github.ref, 'refs/heads/translations/') # Prevent triggering on translation branches
+      github.event.pull_request.merged != true
+
 
     steps:
       - name: Checkout repository
@@ -44,7 +44,8 @@ jobs:
 
       - name: Generate timestamp
         id: timestamp
-        run: echo "timestamp=$(date +'%Y%m%d_%H%M%S')" >> $GITHUB_OUTPUT
+        run: |
+          echo "timestamp=$(date +'%Y%m%d_%H%M%S')" >> $GITHUB_OUTPUT
 
       - name: Check for changes in messages_en.properties
         id: check_changes
@@ -59,11 +60,13 @@ jobs:
           echo "changed=$GLOSSARY_CHANGED" >> $GITHUB_OUTPUT
 
       - name: Set up Gradle
-        run: chmod +x gradlew
+        run: |
+          chmod +x gradlew
 
       - name: Update glossaries if changed
         if: steps.check_glossaries.outputs.changed != '0'
-        run: ./gradlew uploadGlossaryFile -PtargetLanguages=hi,fr,ru --warning-mode all # Address Gradle warnings
+        run: |
+          ./gradlew uploadGlossaryFile -PtargetLanguages=hi,fr,ru
         env:
           GOOGLE_APPLICATION_CREDENTIALS: google-credentials.json
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
@@ -80,7 +83,7 @@ jobs:
           BRANCH_NAME="translations/${EPIC_BRANCH}/${{ steps.timestamp.outputs.timestamp }}"
           git checkout -b "$BRANCH_NAME"
 
-          ./gradlew translatePropertiesDelta -PtargetLanguages=hi -PpreviousFile=src/main/resources/messages_en.properties.bak --warning-mode all # Address Gradle warnings
+          ./gradlew translatePropertiesDelta -PtargetLanguages=hi -PpreviousFile=src/main/resources/messages_en.properties.bak
 
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
