@@ -50,7 +50,7 @@ jobs:
       - name: Update glossaries if changed
         if: steps.check_glossaries.outputs.changed != '0'
         run: |
-          ./gradlew uploadGlossaryFile -PtargetLanguages=hi,fr,ru
+          ./gradlew uploadGlossaryFile -PtargetLanguages=hi
         env:
           GOOGLE_APPLICATION_CREDENTIALS: google-credentials.json
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
@@ -61,7 +61,7 @@ jobs:
           BRANCH_NAME="translations_${GITHUB_SHA:0:7}"
           git checkout -b $BRANCH_NAME
 
-          ./gradlew translateProperties -PtargetLanguages=hi,fr,ru
+          ./gradlew translateProperties -PtargetLanguages=hi
           
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
