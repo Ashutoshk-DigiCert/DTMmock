@@ -23,7 +23,6 @@ jobs:
       github.actor != 'github-actions[bot]' &&
       !contains(github.event.pull_request.labels.*.name, 'automated-translation')
 
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -87,7 +86,12 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
+          cp src/main/resources/messages_en.properties src/main/resources/messages_en.properties.bak
+          
           git add src/main/resources/messages_*.properties
+          git add src/main/resources/messages_en.properties.bak
+
+          rm -f google-credentials.json
 
           git commit -m "🌐 Automated translations for $EPIC_BRANCH
 
