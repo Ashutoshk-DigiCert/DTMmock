@@ -36,7 +36,7 @@ jobs:
           echo "PR Title: ${{ github.event.pull_request.title }}"
           echo "PR Labels: ${{ toJSON(github.event.pull_request.labels) }}"
           echo "PR Author: ${{ github.event.pull_request.user.login }}"
-          echo "PR Body Preview: ${${{ github.event.pull_request.body }}:0:100}..."
+          echo "PR Body: ${{ github.event.pull_request.body }}"
 
       - name: 🔍 Debug Conditions
         run: |
