@@ -15,13 +15,13 @@ jobs:
     if: |
       github.event_name == 'pull_request' &&
       github.event.pull_request.base.ref == 'main' &&
-      !contains(github.head_ref, 'translations/') &&
+      !startsWith(github.head_ref, 'translations/') &&
+      !(github.event.action == 'synchronize' && startsWith(github.event.pull_request.head.ref, 'translations/')) && # Correct condition
       !contains(github.event.pull_request.title, '🌐') &&
       !contains(github.event.pull_request.labels.*.name, 'automated-translation') &&
       github.event.pull_request.user.login != 'github-actions[bot]' &&
       !contains(github.event.pull_request.body, 'Automated Translation PR') &&
-      github.event.action != 'closed' &&
-      github.event.pull_request.user.login != 'github-actions[bot]'
+      github.event.action != 'closed'
 
     steps:
       - name: Checkout repository
