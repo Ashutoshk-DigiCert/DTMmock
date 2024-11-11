@@ -68,6 +68,15 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS: google-credentials.json
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
 
+      - name: Create label if it doesn't exist
+        env:
+          GITHUB_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
+        run: |
+          gh label create automated-translation \
+            --color "0366d6" \
+            --description "PRs created by translation workflow" \
+            --force
+
       - name: Run translations if messages_en.properties changed
         if: steps.check_changes.outputs.changed != '0'
         env:
