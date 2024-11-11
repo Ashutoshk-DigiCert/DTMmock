@@ -12,6 +12,8 @@ on:
 jobs:
   process-translations:
     runs-on: ubuntu-latest
+
+    # Split conditions for better debugging
     if: |
       github.event_name == 'pull_request' &&
       github.event.pull_request.base.ref == 'main' &&
@@ -23,70 +25,119 @@ jobs:
       github.event.action != 'closed'
 
     steps:
-      - name: Checkout repository
+      - name: 📝 Debug Event Context
+        run: |
+          echo "=== EVENT CONTEXT ==="
+          echo "Event Name: ${{ github.event_name }}"
+          echo "Event Action: ${{ github.event.action }}"
+          echo "PR Number: ${{ github.event.pull_request.number }}"
+          echo "Base Ref: ${{ github.event.pull_request.base.ref }}"
+          echo "Head Ref: ${{ github.head_ref }}"
+          echo "PR Title: ${{ github.event.pull_request.title }}"
+          echo "PR Labels: ${{ toJSON(github.event.pull_request.labels) }}"
+          echo "PR Author: ${{ github.event.pull_request.user.login }}"
+          echo "PR Body Preview: ${${{ github.event.pull_request.body }}:0:100}..."
+
+      - name: 🔍 Debug Conditions
+        run: |
+          echo "=== CONDITION CHECKS ==="
+          echo "Is PR?: ${{ github.event_name == 'pull_request' }}"
+          echo "Is Base Main?: ${{ github.event.pull_request.base.ref == 'main' }}"
+          echo "Has translations/ in branch?: ${{ contains(github.head_ref, 'translations/') }}"
+          echo "Has 🌐 in title?: ${{ contains(github.event.pull_request.title, '🌐') }}"
+          echo "Has automated-translation label?: ${{ contains(github.event.pull_request.labels.*.name, 'automated-translation') }}"
+          echo "Is bot PR?: ${{ github.event.pull_request.user.login == 'github-actions[bot]' }}"
+          echo "Has Automated Translation PR text?: ${{ contains(github.event.pull_request.body, 'Automated Translation PR') }}"
+          echo "Is PR closed?: ${{ github.event.action == 'closed' }}"
+
+      - name: ⬇️ Checkout repository
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
           token: ${{ secrets.WORKFLOW_TOKEN }}
 
-      - name: Set up JDK 17
+      - name: ☕ Set up JDK 17
         uses: actions/setup-java@v3
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Google Cloud credentials
+      - name: 🔑 Setup Google Cloud credentials
         run: |
+          echo "Setting up Google Cloud credentials..."
           echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}' > google-credentials.json
+          echo "Credentials file created"
 
-      - name: Generate timestamp
+      - name: ⏰ Generate timestamp
         id: timestamp
         run: |
+          echo "Generating timestamp..."
           echo "timestamp=$(date +'%Y%m%d_%H%M%S')" >> $GITHUB_OUTPUT
+          echo "Generated timestamp: ${{ steps.timestamp.outputs.timestamp }}"
 
-      - name: Check for changes in messages_en.properties
+      - name: 📋 Check for changes in messages_en.properties
         id: check_changes
         run: |
-          CHANGED=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | grep -c "src/main/resources/messages_en.properties" || true)
+          echo "=== CHECKING MESSAGES_EN.PROPERTIES CHANGES ==="
+          echo "Base SHA: ${{ github.event.pull_request.base.sha }}"
+          echo "Head SHA: ${{ github.event.pull_request.head.sha }}"
+          echo "Changed files:"
+          git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }}
+          
+          CHANGED=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | grep -c "src/main/resources/messages_en.properties")
           echo "changed=$CHANGED" >> $GITHUB_OUTPUT
+          echo "Number of changes detected: $CHANGED"
 
-      - name: Check for changes in glossaries
+      - name: 📚 Check for changes in glossaries
         id: check_glossaries
         run: |
-          GLOSSARY_CHANGED=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | grep -c "src/main/resources/glossaries/" || true)
+          echo "=== CHECKING GLOSSARY CHANGES ==="
+          GLOSSARY_CHANGED=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | grep -c "src/main/resources/glossaries/")
           echo "changed=$GLOSSARY_CHANGED" >> $GITHUB_OUTPUT
+          echo "Glossary files changed:"
+          git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | grep "src/main/resources/glossaries/" || echo "No glossary files changed"
+          echo "Number of glossary changes: $GLOSSARY_CHANGED"
 
-      - name: Set up Gradle
+      - name: 🛠️ Set up Gradle
         run: |
+          echo "Setting up Gradle..."
           chmod +x gradlew
+          echo "Gradle setup complete"
 
-      - name: Update glossaries if changed
+      - name: 🔄 Update glossaries if changed
         if: steps.check_glossaries.outputs.changed != '0'
         run: |
+          echo "=== UPDATING GLOSSARIES ==="
+          echo "Detected glossary changes, running update..."
           ./gradlew uploadGlossaryFile -PtargetLanguages=hi,fr,ru
+          echo "Glossary update complete"
         env:
           GOOGLE_APPLICATION_CREDENTIALS: google-credentials.json
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
 
-      - name: Create label if it doesn't exist
+      - name: 🏷️ Create label if it doesn't exist
         env:
           GITHUB_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
         run: |
+          echo "Creating/verifying automated-translation label..."
           gh label create automated-translation \
             --color "0366d6" \
             --description "PRs created by translation workflow" \
             --force
 
-      - name: Check if translation PR exists
+      - name: 🔎 Check if translation PR exists
         id: check_pr
         env:
           GITHUB_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
           EPIC_BRANCH: ${{ github.event.pull_request.head.ref }}
         run: |
+          echo "=== CHECKING EXISTING TRANSLATION PRS ==="
+          echo "Checking for PRs targeting branch: $EPIC_BRANCH"
           PR_COUNT=$(gh pr list --base "$EPIC_BRANCH" --head "translations/$EPIC_BRANCH" --state open --json number --jq length)
           echo "pr_exists=$PR_COUNT" >> $GITHUB_OUTPUT
+          echo "Number of existing translation PRs: $PR_COUNT"
 
-      - name: Run translations if messages_en.properties changed
+      - name: 🌐 Run translations if messages_en.properties changed
         if: steps.check_changes.outputs.changed != '0' && steps.check_pr.outputs.pr_exists == '0'
         env:
           EPIC_BRANCH: ${{ github.event.pull_request.head.ref }}
@@ -95,31 +146,45 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS: google-credentials.json
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
         run: |
+          echo "=== RUNNING TRANSLATIONS ==="
+          echo "Epic Branch: $EPIC_BRANCH"
+          echo "PR Number: $PULL_REQUEST_NUMBER"
+          echo "Timestamp: ${{ steps.timestamp.outputs.timestamp }}"
+          
           BRANCH_NAME="translations/${EPIC_BRANCH}/${{ steps.timestamp.outputs.timestamp }}"
+          echo "Creating branch: $BRANCH_NAME"
           git checkout -b "$BRANCH_NAME"
 
+          echo "Running translation task..."
           ./gradlew translatePropertiesDelta -PtargetLanguages=hi,fr,ru -PpreviousFile=src/main/resources/messages_en.properties.bak
 
+          echo "Configuring git..."
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
+          echo "Backing up properties file..."
           cp src/main/resources/messages_en.properties src/main/resources/messages_en.properties.bak
 
-          # Check if there are any changes to commit
+          echo "Checking for changes to commit..."
           if [[ -n "$(git status --porcelain)" ]]; then
+            echo "Changes detected, creating commit..."
             git add src/main/resources/messages_*.properties
             git add src/main/resources/messages_en.properties.bak
 
+            echo "Removing credentials file..."
             rm -f google-credentials.json
 
+            echo "Committing changes..."
             git commit -m "🌐 Automated translations for $EPIC_BRANCH
 
             - Source PR: #$PULL_REQUEST_NUMBER
             - Languages: hi, fr, ru
             - Timestamp: ${{ steps.timestamp.outputs.timestamp }}"
 
+            echo "Pushing branch..."
             git push origin $BRANCH_NAME
 
+            echo "Creating PR..."
             gh pr create \
               --base "$EPIC_BRANCH" \
               --head "$BRANCH_NAME" \
@@ -142,6 +207,8 @@ jobs:
 
               ---
               *This PR was automatically generated by the Translation Workflow*"
+          
+            echo "Translation PR created successfully!"
           else
             echo "No translation changes to commit"
           fi
