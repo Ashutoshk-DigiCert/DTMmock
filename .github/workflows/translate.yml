@@ -84,17 +84,15 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS: google-credentials.json
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
         run: |
-          # Check if working tree is clean before starting
-          if [[ -z "$(git status --porcelain)" ]]; then
-            echo "Working tree is clean - no new changes to process"
-            echo "✅ Workflow completed successfully"
+          # First, check if this is a merge from an automated PR
+          if git log -1 --pretty=%B | grep -q "🌐 Automated translations"; then
+            echo "✅ Changes are from translation PR - no further action needed"
             exit 0
           fi
 
-          # Check the last commit message
-          LAST_COMMIT_MSG=$(git log -1 --pretty=%B)
-          if echo "$LAST_COMMIT_MSG" | grep -q "🌐 Automated translations"; then
-            echo "✅ Changes are from translation PR - no further action needed"
+          # Check if working tree is clean
+          if [[ -z "$(git status --porcelain)" ]]; then
+            echo "✅ Working tree is clean - no new changes to process"
             exit 0
           fi
 
@@ -147,8 +145,7 @@ jobs:
             else
             echo "✅ No changes to commit - workflow completed successfully"
             fi
-            exit 0
             else
             echo "✅ No changes required - workflow completed successfully"
-            exit 0
             fi
+            exit 0
