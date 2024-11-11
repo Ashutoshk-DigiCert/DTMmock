@@ -19,11 +19,9 @@ jobs:
       !contains(github.event.pull_request.title, '🌐') &&
       !contains(github.event.pull_request.body, 'Automated Translation PR') &&
       github.event.pull_request.user.login != 'github-actions[bot]' &&
-      !contains(github.event.pull_request.head.ref, 'translations/') &&
       github.actor != 'github-actions[bot]' &&
       !contains(github.event.pull_request.labels.*.name, 'automated-translation') &&
       github.event.pull_request.merged != true
-
 
     steps:
       - name: Checkout repository
@@ -74,13 +72,12 @@ jobs:
       - name: Run translations if messages_en.properties changed
         if: steps.check_changes.outputs.changed != '0'
         env:
-          EPIC_BRANCH: ${{ github.event.pull_request.head.ref }}
           PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
           GITHUB_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
           GOOGLE_APPLICATION_CREDENTIALS: google-credentials.json
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
         run: |
-          BRANCH_NAME="translations/${EPIC_BRANCH}/${{ steps.timestamp.outputs.timestamp }}"
+          BRANCH_NAME="translations/${{ github.head_ref }}/${{ steps.timestamp.outputs.timestamp }}"
           git checkout -b "$BRANCH_NAME"
 
           ./gradlew translatePropertiesDelta -PtargetLanguages=hi -PpreviousFile=src/main/resources/messages_en.properties.bak
@@ -95,7 +92,7 @@ jobs:
 
           rm -f google-credentials.json
 
-          git commit -m "🌐 Automated translations for $EPIC_BRANCH
+          git commit -m "🌐 Automated translations for ${{ github.head_ref }}
 
           - Source PR: #$PULL_REQUEST_NUMBER
           - Languages: hi, fr, ru
@@ -104,9 +101,9 @@ jobs:
           git push origin $BRANCH_NAME
 
           gh pr create \
-            --base "$EPIC_BRANCH" \
+            --base "${{ github.head_ref }}" \
             --head $BRANCH_NAME \
-            --title "🌐 Translations for $EPIC_BRANCH (#$PULL_REQUEST_NUMBER)" \
+            --title "🌐 Translations for ${{ github.head_ref }} (#$PULL_REQUEST_NUMBER)" \
             --body "## Automated Translation PR
 
             🔄 Generated from: #$PULL_REQUEST_NUMBER
