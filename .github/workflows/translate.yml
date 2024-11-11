@@ -20,9 +20,7 @@ jobs:
       !contains(github.event.pull_request.labels.*.name, 'automated-translation') &&
       github.event.pull_request.user.login != 'github-actions[bot]' &&
       !contains(github.event.pull_request.body, 'Automated Translation PR') &&
-      github.event.pull_request.merged != true &&
-      !startsWith(github.head_ref, 'translations/') &&
-      !endsWith(github.head_ref, '_translated')
+      github.event.pull_request.merged != true
 
     steps:
       - name: Checkout repository
@@ -83,12 +81,24 @@ jobs:
         id: check_pr
         env:
           GITHUB_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
+          EPIC_BRANCH: ${{ github.event.pull_request.head.ref }}
         run: |
-          PR_COUNT=$(gh pr list --base "${{ github.event.pull_request.head.ref }}" --head "translations/${EPIC_BRANCH}" --json number --jq length)
-          echo "pr_exists=$PR_COUNT" >> $GITHUB_OUTPUT
+          TRANSLATION_PR_EXISTS=$(gh pr list \
+            --search "is:pr is:open base:$EPIC_BRANCH label:automated-translation" \
+            --json number --jq length)
+          echo "pr_exists=$TRANSLATION_PR_EXISTS" >> $GITHUB_OUTPUT
+
+      - name: Check source branch
+        id: check_source
+        run: |
+          IS_TRANSLATION_BRANCH=$(echo ${{ github.event.pull_request.head.ref }} | grep -c "translations/" || true)
+          echo "is_translation=$IS_TRANSLATION_BRANCH" >> $GITHUB_OUTPUT
 
       - name: Run translations if messages_en.properties changed
-        if: steps.check_changes.outputs.changed != '0' && steps.check_pr.outputs.pr_exists == '0'
+        if: |
+          steps.check_changes.outputs.changed != '0' && 
+          steps.check_pr.outputs.pr_exists == '0' &&
+          steps.check_source.outputs.is_translation == '0'
         env:
           EPIC_BRANCH: ${{ github.event.pull_request.head.ref }}
           PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
