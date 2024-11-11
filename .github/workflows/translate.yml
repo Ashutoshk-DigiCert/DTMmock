@@ -44,29 +44,17 @@ jobs:
         run: |
           echo "timestamp=$(date +'%Y%m%d_%H%M%S')" >> $GITHUB_OUTPUT
 
-      - name: Check for changes in messages_en.properties
+      - name: Check for changes
         id: check_changes
         run: |
-          CHANGED=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | grep -c "src/main/resources/messages_en.properties" || true)
-          echo "changed=$CHANGED" >> $GITHUB_OUTPUT
-
-      - name: Check for changes in glossaries
-        id: check_glossaries
-        run: |
+          MESSAGES_CHANGED=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | grep -c "src/main/resources/messages_en.properties" || true)
           GLOSSARY_CHANGED=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | grep -c "src/main/resources/glossaries/" || true)
-          echo "changed=$GLOSSARY_CHANGED" >> $GITHUB_OUTPUT
+          echo "messages_changed=$MESSAGES_CHANGED" >> $GITHUB_OUTPUT
+          echo "glossary_changed=$GLOSSARY_CHANGED" >> $GITHUB_OUTPUT
 
       - name: Set up Gradle
         run: |
           chmod +x gradlew
-
-      - name: Update glossaries if changed
-        if: steps.check_glossaries.outputs.changed != '0'
-        run: |
-          ./gradlew uploadGlossaryFile -PtargetLanguages=hi,fr,ru
-        env:
-          GOOGLE_APPLICATION_CREDENTIALS: google-credentials.json
-          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
 
       - name: Create label if it doesn't exist
         env:
@@ -86,8 +74,8 @@ jobs:
           PR_COUNT=$(gh pr list --base "$EPIC_BRANCH" --head "translations/$EPIC_BRANCH" --state open --json number --jq length)
           echo "pr_exists=$PR_COUNT" >> $GITHUB_OUTPUT
 
-      - name: Run translations if messages_en.properties changed
-        if: steps.check_changes.outputs.changed != '0' && steps.check_pr.outputs.pr_exists == '0'
+      - name: Process translations and glossaries
+        if: steps.check_changes.outputs.messages_changed != '0' && steps.check_pr.outputs.pr_exists == '0'
         env:
           EPIC_BRANCH: ${{ github.event.pull_request.head.ref }}
           PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
@@ -95,17 +83,26 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS: google-credentials.json
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
         run: |
+          # Create new branch for translations
           BRANCH_NAME="translations/${EPIC_BRANCH}/${{ steps.timestamp.outputs.timestamp }}"
           git checkout -b "$BRANCH_NAME"
 
+          # Update glossaries if changed
+          if [ "${{ steps.check_changes.outputs.glossary_changed }}" != "0" ]; then
+            ./gradlew uploadGlossaryFile -PtargetLanguages=hi,fr,ru
+          fi
+
+          # Translate properties
           ./gradlew translatePropertiesDelta -PtargetLanguages=hi,fr,ru -PpreviousFile=src/main/resources/messages_en.properties.bak
 
+          # Configure git
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
+          # Backup current messages file
           cp src/main/resources/messages_en.properties src/main/resources/messages_en.properties.bak
 
-          # Check if there are any changes to commit
+          # Check for changes and create PR
           if [[ -n "$(git status --porcelain)" ]]; then
             git add src/main/resources/messages_*.properties
             git add src/main/resources/messages_en.properties.bak
@@ -118,7 +115,7 @@ jobs:
             - Languages: hi, fr, ru
             - Timestamp: ${{ steps.timestamp.outputs.timestamp }}"
 
-            git push origin $BRANCH_NAME
+            git push origin "$BRANCH_NAME"
 
             gh pr create \
               --base "$EPIC_BRANCH" \
