@@ -75,18 +75,16 @@ jobs:
           echo "timestamp=$(date +'%Y%m%d_%H%M%S')" >> $GITHUB_OUTPUT
           echo "Generated timestamp: ${{ steps.timestamp.outputs.timestamp }}"
 
-      - name: 📋 Check for changes in messages_en.properties
-        id: check_changes
+      - name: 📚 Check for changes in glossaries
+        id: check_glossaries
         run: |
-          echo "=== CHECKING MESSAGES_EN.PROPERTIES CHANGES ==="
-          echo "Base SHA: ${{ github.event.pull_request.base.sha }}"
-          echo "Head SHA: ${{ github.event.pull_request.head.sha }}"
-          echo "Changed files:"
-          git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }}
-          
-          CHANGED=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | grep -c "src/main/resources/messages_en.properties")
-          echo "changed=$CHANGED" >> $GITHUB_OUTPUT
-          echo "Number of changes detected: $CHANGED"
+          echo "=== CHECKING GLOSSARY CHANGES ==="
+          GLOSSARY_CHANGED=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | { grep -c "src/main/resources/glossaries/" || echo "0"; })
+          echo "changed=$GLOSSARY_CHANGED" >> $GITHUB_OUTPUT
+          echo "Glossary files changed:"
+          git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | { grep "src/main/resources/glossaries/" || echo "No glossary files changed"; }
+          echo "Number of glossary changes: $GLOSSARY_CHANGED"
+
 
       - name: 📚 Check for changes in glossaries
         id: check_glossaries
