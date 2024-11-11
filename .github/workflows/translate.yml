@@ -23,6 +23,17 @@ jobs:
       github.event.action != 'closed'
 
     steps:
+      - name: Debug: Log GitHub context
+        run: |
+          echo "Event name: ${{ github.event_name }}"
+          echo "Head ref: ${{ github.head_ref }}"
+          echo "Base ref: ${{ github.event.pull_request.base.ref }}"
+          echo "Pull Request title: ${{ github.event.pull_request.title }}"
+          echo "Pull Request labels: ${{ toJSON(github.event.pull_request.labels) }}"
+          echo "User login: ${{ github.event.pull_request.user.login }}"
+          echo "PR body: ${{ github.event.pull_request.body }}"
+          echo "Action: ${{ github.event.action }}"
+
       - name: Checkout repository
         uses: actions/checkout@v3
         with:
@@ -54,14 +65,19 @@ jobs:
         id: check_glossaries
         run: |
           GLOSSARY_CHANGED=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | grep -c "src/main/resources/glossaries/" || true)
-          echo "changed=$GLOSSARY_CHANGED" >> $GITHUB_OUTPUT
+          echo "glossary_changed=$GLOSSARY_CHANGED" >> $GITHUB_OUTPUT
+
+      - name: Debug: Check changes outputs
+        run: |
+          echo "messages_en.properties changed: ${{ steps.check_changes.outputs.changed }}"
+          echo "Glossary files changed: ${{ steps.check_glossaries.outputs.glossary_changed }}"
 
       - name: Set up Gradle
         run: |
           chmod +x gradlew
 
       - name: Update glossaries if changed
-        if: steps.check_glossaries.outputs.changed != '0'
+        if: steps.check_glossaries.outputs.glossary_changed != '0'
         run: |
           ./gradlew uploadGlossaryFile -PtargetLanguages=hi,fr,ru
         env:
