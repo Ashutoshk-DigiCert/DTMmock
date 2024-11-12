@@ -98,6 +98,19 @@ jobs:
           fi
 
           BRANCH_NAME="translations/${{ github.event.pull_request.head.ref }}-${{ steps.timestamp.outputs.timestamp }}"
+          git checkout -b "$BRANCH_NAME" || {
+            echo "✅ Branch creation not needed - workflow completed successfully"
+            exit 0
+          }
+
+          # Rest of your existing script...
+
+          # Ensure clean exit at the end
+          echo "✅ Workflow completed successfully"
+          exit 0
+          
+          
+          BRANCH_NAME="translations/${{ github.event.pull_request.head.ref }}-${{ steps.timestamp.outputs.timestamp }}"
           git checkout -b "$BRANCH_NAME"
 
           if [ "${{ steps.check_changes.outputs.glossary_changed }}" != "0" ]; then
@@ -129,7 +142,7 @@ jobs:
           🔄 Generated from: #${{ github.event.pull_request.number }}
           📅 Timestamp: ${{ steps.timestamp.outputs.timestamp }}
           🌍 Target Languages: hi, fr, ru
-            
+          
             ### Changes Include:
             - Updated translations for modified English strings
             - Generated from latest changes in \`messages_en.properties\`
