@@ -6,8 +6,8 @@ on:
     branches:
       - main
     paths:
-      - 'rc/main/resources/messages_en.properties'
-      - 'rc/main/resources/glossaries/**'
+      - 'src/main/resources/messages_en.properties'
+      - 'src/main/resources/glossaries/**'
       - '!src/main/resources/messages_*.bak'
       - '!src/main/resources/messages_fr.properties'
       - '!src/main/resources/messages_hi.properties'
@@ -18,14 +18,14 @@ jobs:
     runs-on: ubuntu-latest
     if: |
       github.event_name == 'pull_request' &&
-      github.event.pull_request.base.ref == 'ain' &&
+      github.event.pull_request.base.ref == 'main' &&
       !startsWith(github.head_ref, 'translations/') &&
       !contains(github.event.pull_request.title, '🌐') &&
       !contains(github.event.pull_request.labels.*.name, 'automated-translation') &&
       !contains(github.event.pull_request.body, 'Automated Translation PR') &&
-      github.event.action!= 'closed' &&
-      github.actor!= 'github-actions[bot]' &&
-      github.event.pull_request.user.login!= 'github-actions[bot]' &&
+      github.event.action != 'closed' &&
+      github.actor != 'github-actions[bot]' &&
+      github.event.pull_request.user.login != 'github-actions[bot]' &&
       !endsWith(github.event.pull_request.head.ref, '.properties')
 
     steps:
@@ -63,8 +63,22 @@ jobs:
       - name: Set up Gradle
         run: chmod +x gradlew
 
+      - name: Create label if it doesn't exist
+        env:
+          GITHUB_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
+        run: |
+          gh label create automated-translation --color "0366d6" --description "PRs created by translation workflow" --force || true
+
+      - name: Check if translation PR exists
+        id: check_pr
+        env:
+          GITHUB_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
+        run: |
+          PR_COUNT=$(gh pr list --base "${{ github.event.pull_request.head.ref }}" --head "translations/${{ github.event.pull_request.head.ref }}-*" --state open --json number --jq length)
+          echo "pr_exists=$PR_COUNT" >> $GITHUB_OUTPUT
+
       - name: Process translations and glossaries
-        if: steps.check_changes.outputs.messages_changed!= '0' || steps.check_changes.outputs.glossary_changed!= '0'
+        if: steps.check_changes.outputs.messages_changed != '0' && steps.check_pr.outputs.pr_exists == '0'
         env:
           GITHUB_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
           GOOGLE_APPLICATION_CREDENTIALS: google-credentials.json
@@ -85,39 +99,14 @@ jobs:
           }
 
           # Process glossary changes if any
-          if [ "${{ steps.check_changes.outputs.glossary_changed }}"!= "0" ]; then
-           ./gradlew uploadGlossaryFile -PtargetLanguages=hi,fr,ru || true
+          if [ "${{ steps.check_changes.outputs.glossary_changed }}" != "0" ]; then
+            ./gradlew uploadGlossaryFile -PtargetLanguages=hi,fr,ru || true
             echo "✅ Processed glossary changes"
           fi
 
           # Run translation task
           ./gradlew translatePropertiesDelta -PtargetLanguages=hi,fr,ru -PpreviousFile=src/main/resources/messages_en.properties.bak || true
           echo "✅ Completed translation process"
-
-          # Identify modified entries for each language
-          MODIFIED_ENTRIES_HI=0
-          MODIFIED_ENTRIES_FR=0
-          MODIFIED_ENTRIES_RU=0
-          # Assuming the below is how you'd check for modified entries (UPDATE THIS PART ACCORDING TO YOUR ACTUAL LOGIC)
-          if [ -n "$(git diff --name-only $BASE_SHA $HEAD_SHA | grep "src/main/resources/messages_hi.properties")" ]; then
-            MODIFIED_ENTRIES_HI=1
-          fi
-          if [ -n "$(git diff --name-only $BASE_SHA $HEAD_SHA | grep "src/main/resources/messages_fr.properties")" ]; then
-            MODIFIED_ENTRIES_FR=1
-          fi
-          if [ -n "$(git diff --name-only $BASE_SHA $HEAD_SHA | grep "src/main/resources/messages_ru.properties")" ]; then
-            MODIFIED_ENTRIES_RU=1
-          fi
-
-          # New Step: Check for Translation Needs
-          if [ $MODIFIED_ENTRIES_HI -eq 0 ] && [ $MODIFIED_ENTRIES_FR -eq 0 ] && [ $MODIFIED_ENTRIES_RU -eq 0 ]; then
-            echo "✅ No translation changes needed - proceeding to exit"
-            # Exit without creating a PR
-            git config --global user.name "github-actions[bot]"
-            git config --global user.email "github-actions[bot]@users.noreply.github.com"
-            echo "✅ Workflow completed successfully - no changes"
-            exit 0
-          fi
 
           # Setup git configuration
           git config --global user.name "github-actions[bot]"
@@ -145,41 +134,28 @@ jobs:
               --title "🌐 Translations for ${{ github.event.pull_request.head.ref }} (#${{ github.event.pull_request.number }})" \
               --label "automated-translation" \
               --body "## Automated Translation PR
-          
+
                       🔄 Generated from: #${{ github.event.pull_request.number }}
                       📅 Timestamp: ${{ steps.timestamp.outputs.timestamp }}
                       🌍 Target Languages: hi, fr, ru
-          
+
                       ### Changes Include:
                       - Updated translations for modified English strings
                       - Generated from latest changes in \`messages_en.properties\`
-          
+
                       ### Review Instructions:
                       1. Check generated translations for context accuracy
                       2. Verify no missing translations
                       3. Confirm formatting consistency
-          
+
                       ---
                       *This PR was automatically generated by the Translation Workflow*"
             echo "✅ Successfully created new translation PR"
           else
-            echo "✅ No translation changes needed - all files are up to date"
+            echo "✅ No changes to commit - translations are up to date"
+            # Exit successfully even when there are no changes
+            exit 0
           fi
 
           # Always exit successfully
-          echo "✅ Workflow completed successfully"
           exit 0
-
-      - name: Create label if it doesn't exist
-        env:
-          GITHUB_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
-        run: |
-          gh label create automated-translation --color "0366d6" --description "PRs created by translation workflow" --force || true
-
-      - name: Check if translation PR exists
-        id: check_pr
-        env:
-          GITHUB_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
-        run: |
-          PR_COUNT=$(gh pr list --base "${{ github.event.pull_request.head.ref }}" --head "translations/${{ github.event.pull_request.head.ref }}-*" --state open --json number --jq length)
-          echo "pr_exists=$PR_COUNT" >> $GITHUB_OUTPUT
