@@ -78,7 +78,7 @@ jobs:
         run: |
           ./gradlew translatePropertiesDelta \
             -PtargetLanguages=hi,fr,de,it,ru \
-            --debug
+            --info
 
       - name: Process Glossary Changes
         if: needs.check-changes.outputs.glossaries_changed == 'true'
