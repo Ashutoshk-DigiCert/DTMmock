@@ -60,18 +60,15 @@ jobs:
       - name: Install jq
         run: sudo apt-get install -y jq
 
-      - name: Create Google Credentials File
+      - name: Create and Verify Google Credentials File
         run: |
-          echo '${{ secrets.GOOGLE_CREDENTIALS }}' > google-credentials.json
+          echo '${{ secrets.GOOGLE_CREDENTIALS }}' | jq '.' > google-credentials.json
           chmod 600 google-credentials.json
-
-      - name: Validate Google Credentials
-        run: |
-          if [ ! -s google-credentials.json ]; then
-            echo "Error: google-credentials.json is empty"
+          if ! jq -e . google-credentials.json > /dev/null; then
+            echo "Invalid JSON in credentials file"
             exit 1
           fi
-          jq . google-credentials.json > /dev/null
+          echo "GOOGLE_APPLICATION_CREDENTIALS=${GITHUB_WORKSPACE}/google-credentials.json" >> $GITHUB_ENV
 
       - name: Create backup of current messages_en.properties
         if: needs.check-changes.outputs.properties_changed == 'true'
@@ -79,21 +76,24 @@ jobs:
 
       - name: Process Glossary Changes
         if: needs.check-changes.outputs.glossaries_changed == 'true'
-        run: |
-          export GOOGLE_APPLICATION_CREDENTIALS="${GITHUB_WORKSPACE}/google-credentials.json"
-          ./gradlew uploadGlossaryFile -PtargetLanguages=${{ needs.check-changes.outputs.changed_glossaries }}
         env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ env.GOOGLE_APPLICATION_CREDENTIALS }}
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+        run: |
+          ./gradlew uploadGlossaryFile \
+            -PtargetLanguages=${{ needs.check-changes.outputs.changed_glossaries }} \
+            --info
 
       - name: Run Delta Translation
         if: needs.check-changes.outputs.properties_changed == 'true'
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ env.GOOGLE_APPLICATION_CREDENTIALS }}
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
         run: |
-          export GOOGLE_APPLICATION_CREDENTIALS="${GITHUB_WORKSPACE}/google-credentials.json"
           ./gradlew translatePropertiesDelta \
             -PtargetLanguages=hi,fr,de,it,ru \
-            -PpreviousFile=src/main/resources/messages_en.properties.bak
-        env:
-          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+            -PpreviousFile=src/main/resources/messages_en.properties.bak \
+            --info
 
       - name: Check for Changes
         id: check-for-changes
