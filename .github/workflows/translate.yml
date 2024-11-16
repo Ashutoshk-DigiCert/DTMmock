@@ -1,161 +1,96 @@
-name: Translation Workflow
+name: Translation Automation
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
     branches:
-      - main
+      - 'main'
     paths:
       - 'src/main/resources/messages_en.properties'
-      - 'src/main/resources/glossaries/**'
-      - '!src/main/resources/messages_*.bak'
-      - '!src/main/resources/messages_fr.properties'
-      - '!src/main/resources/messages_hi.properties'
-      - '!src/main/resources/messages_ru.properties'
+      - 'src/main/resources/glossaries/glossaries_*.csv'
 
 jobs:
-  process-translations:
+  check-changes:
     runs-on: ubuntu-latest
-    if: |
-      github.event_name == 'pull_request' &&
-      github.event.pull_request.base.ref == 'main' &&
-      !startsWith(github.head_ref, 'translations/') &&
-      !contains(github.event.pull_request.title, '🌐') &&
-      !contains(github.event.pull_request.labels.*.name, 'automated-translation') &&
-      !contains(github.event.pull_request.body, 'Automated Translation PR') &&
-      github.event.action != 'closed' &&
-      github.actor != 'github-actions[bot]' &&
-      github.event.pull_request.user.login != 'github-actions[bot]' &&
-      !endsWith(github.event.pull_request.head.ref, '.properties')
-
+    outputs:
+      properties_changed: ${{ steps.check-files.outputs.properties_changed }}
+      glossaries_changed: ${{ steps.check-files.outputs.glossaries_changed }}
+      changed_glossaries: ${{ steps.check-files.outputs.changed_glossaries }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
         with:
           fetch-depth: 0
+
+      - name: Check changed files
+        id: check-files
+        run: |
+          if git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | grep -q "src/main/resources/messages_en.properties"; then
+            echo "properties_changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "properties_changed=false" >> $GITHUB_OUTPUT
+          fi
+          
+          if git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | grep -q "src/main/resources/glossaries/glossaries_.*\.csv"; then
+            echo "glossaries_changed=true" >> $GITHUB_OUTPUT
+            CHANGED_GLOSSARIES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | grep "glossaries_.*\.csv" | sed -E 's/.*glossaries_([a-z]{2})\.csv/\1/' | tr '\n' ',' | sed 's/,$//')
+            echo "changed_glossaries=$CHANGED_GLOSSARIES" >> $GITHUB_OUTPUT
+          else
+            echo "glossaries_changed=false" >> $GITHUB_OUTPUT
+            echo "changed_glossaries=''" >> $GITHUB_OUTPUT
+          fi
+
+  process-translations:
+    needs: check-changes
+    if: needs.check-changes.outputs.properties_changed == 'true' || needs.check-changes.outputs.glossaries_changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
           token: ${{ secrets.WORKFLOW_TOKEN }}
 
       - name: Set up JDK 17
         uses: actions/setup-java@v3
         with:
-          distribution: 'temurin'
           java-version: '17'
+          distribution: 'temurin'
 
-      - name: Setup Google Cloud credentials
+      - name: Setup Gradle
+        uses: gradle/gradle-build-action@v2
+
+      - name: Create Google Credentials File
+        run: echo "${{ secrets.GOOGLE_CREDENTIALS }}" > google-credentials.json
+
+      - name: Create backup of current messages_en.properties
+        if: needs.check-changes.outputs.properties_changed == 'true'
+        run: cp src/main/resources/messages_en.properties src/main/resources/messages_en.properties.bak
+
+      - name: Process Glossary Changes
+        if: needs.check-changes.outputs.glossaries_changed == 'true'
         run: |
-          echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}' > google-credentials.json
-
-      - name: Generate timestamp
-        id: timestamp
-        run: |
-          echo "timestamp=$(date +'%Y%m%d_%H%M%S')" >> $GITHUB_OUTPUT
-
-      - name: Check for changes
-        id: check_changes
-        run: |
-          BASE_SHA=$(git rev-parse ${{ github.event.pull_request.base.sha }})
-          HEAD_SHA=$(git rev-parse ${{ github.event.pull_request.head.sha }})
-          MESSAGES_CHANGED=$(git diff --name-only $BASE_SHA $HEAD_SHA | grep -c "src/main/resources/messages_en.properties" || true)
-          GLOSSARY_CHANGED=$(git diff --name-only $BASE_SHA $HEAD_SHA | grep -c "src/main/resources/glossaries/" || true)
-          echo "messages_changed=$MESSAGES_CHANGED" >> $GITHUB_OUTPUT
-          echo "glossary_changed=$GLOSSARY_CHANGED" >> $GITHUB_OUTPUT
-
-      - name: Set up Gradle
-        run: chmod +x gradlew
-
-      - name: Create label if it doesn't exist
+          ./gradlew uploadGlossaryFile -PtargetLanguages=${{ needs.check-changes.outputs.changed_glossaries }}
         env:
-          GITHUB_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
-        run: |
-          gh label create automated-translation --color "0366d6" --description "PRs created by translation workflow" --force || true
-
-      - name: Check if translation PR exists
-        id: check_pr
-        env:
-          GITHUB_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
-        run: |
-          PR_COUNT=$(gh pr list --base "${{ github.event.pull_request.head.ref }}" --head "translations/${{ github.event.pull_request.head.ref }}-*" --state open --json number --jq length)
-          echo "pr_exists=$PR_COUNT" >> $GITHUB_OUTPUT
-
-      - name: Process translations and glossaries
-        if: steps.check_changes.outputs.messages_changed != '0' && steps.check_pr.outputs.pr_exists == '0'
-        env:
-          GITHUB_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
           GOOGLE_APPLICATION_CREDENTIALS: google-credentials.json
-          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Run Delta Translation
+        if: needs.check-changes.outputs.properties_changed == 'true'
         run: |
-          # Enhanced check for automated PR changes
-          COMMIT_MSG=$(git log -1 --pretty=%B)
-          if echo "$COMMIT_MSG" | grep -q "🌐 Automated translations" || echo "$COMMIT_MSG" | grep -q "Merge pull request.*translations/"; then
-            echo "✅ Changes are from translation PR merge - no further action needed"
-            exit 0
-          fi
+          ./gradlew translatePropertiesDelta -PtargetLanguages=hi,fr,de,it,ru -PpreviousFile=src/main/resources/messages_en.properties.bak
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: google-credentials.json
 
-          # Create new branch and proceed with translations
-          BRANCH_NAME="translations/${{ github.event.pull_request.head.ref }}-${{ steps.timestamp.outputs.timestamp }}"
-          git checkout -b "$BRANCH_NAME" || {
-            echo "✅ Branch creation not needed - workflow completed successfully"
-            exit 0
-          }
-
-          # Process glossary changes if any
-          if [ "${{ steps.check_changes.outputs.glossary_changed }}" != "0" ]; then
-            ./gradlew uploadGlossaryFile -PtargetLanguages=hi,fr,ru || true
-            echo "✅ Processed glossary changes"
-          fi
-
-          # Run translation task
-          ./gradlew translatePropertiesDelta -PtargetLanguages=hi,fr,ru -PpreviousFile=src/main/resources/messages_en.properties.bak || true
-          echo "✅ Completed translation process"
-
-          # Setup git configuration
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-
-          # Backup current state
-          cp src/main/resources/messages_en.properties src/main/resources/messages_en.properties.bak || true
-
-          # Check for changes and handle both cases
-          if [[ -n "$(git status --porcelain)" ]]; then
-            echo "📝 Changes detected, preparing PR..."
-
-            # Stage and commit changes
-            git add src/main/resources/messages_*.properties
-            git add src/main/resources/messages_en.properties.bak
-            rm -f google-credentials.json
-
-            git commit -m "🌐 Automated translations for ${{ github.event.pull_request.head.ref }} (#${{ github.event.pull_request.number }})"
-            git push origin "$BRANCH_NAME"
-
-            # Create PR
-            gh pr create \
-              --base "${{ github.event.pull_request.head.ref }}" \
-              --head "$BRANCH_NAME" \
-              --title "🌐 Translations for ${{ github.event.pull_request.head.ref }} (#${{ github.event.pull_request.number }})" \
-              --label "automated-translation" \
-              --body "## Automated Translation PR
-
-                      🔄 Generated from: #${{ github.event.pull_request.number }}
-                      📅 Timestamp: ${{ steps.timestamp.outputs.timestamp }}
-                      🌍 Target Languages: hi, fr, ru
-
-                      ### Changes Include:
-                      - Updated translations for modified English strings
-                      - Generated from latest changes in \`messages_en.properties\`
-
-                      ### Review Instructions:
-                      1. Check generated translations for context accuracy
-                      2. Verify no missing translations
-                      3. Confirm formatting consistency
-
-                      ---
-                      *This PR was automatically generated by the Translation Workflow*"
-            echo "✅ Successfully created new translation PR"
-          else
-            echo "✅ No changes to commit - translations are up to date"
-            # Exit successfully even when there are no changes
-            exit 0
-          fi
-
-          # Always exit successfully
-          exit 0
+      - name: Create Pull Request
+        if: success()
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.WORKFLOW_TOKEN }}
+          commit-message: "chore: Update translations [skip ci]"
+          title: "chore: Update translations for PR #${{ github.event.pull_request.number }}"
+          body: |
+            Automated translation updates for changes in:
+            ${needs.check-changes.outputs.properties_changed == 'true' && '- messages_en.properties' || ''}
+            ${needs.check-changes.outputs.glossaries_changed == 'true' && '- glossaries files' || ''}
+            
+            Original PR: #${{ github.event.pull_request.number }}
+          branch: translation-updates-${{ github.event.pull_request.number }}
+          base: ${{ github.event.pull_request.head.ref }}
+          labels: automated,translations
