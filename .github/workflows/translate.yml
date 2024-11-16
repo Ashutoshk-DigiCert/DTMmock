@@ -102,8 +102,17 @@ jobs:
 
       - name: Stage and Commit Changes
         run: |
+          # Explicitly ignore google-credentials.json
+          echo "google-credentials.json" >> .gitignore
+          
+          # Stage only translation files
           git add src/main/resources/messages_*.properties
           git add src/main/resources/glossaries/*.csv
+          
+          # Remove any staged credentials file
+          git reset -- google-credentials.json
+          
+          # Commit changes
           git commit -m "chore: Update translations [skip ci]" || echo "No changes to commit"
 
       - name: Check for Changes
