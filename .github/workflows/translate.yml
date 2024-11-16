@@ -90,8 +90,7 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ env.GOOGLE_APPLICATION_CREDENTIALS }}
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
         run: |
-          ./gradlew translatePropertiesDelta \
-            -PtargetLanguages=hi,fr,de,it,ru \
+          ./gradlew translatePropertiesDelta -PtargetLanguages=hi,fr,de,it,ru \
             -PpreviousFile=src/main/resources/messages_en.properties.bak \
             --info
 
