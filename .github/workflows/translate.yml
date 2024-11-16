@@ -62,7 +62,7 @@ jobs:
 
       - name: Create and Verify Google Credentials File
         run: |
-          echo '${{ secrets.GOOGLE_CREDENTIALS }}' | jq '.' > google-credentials.json
+          echo '${{ secrets.GOOGLE_APPLICATIONS_CREDENTIALS }}' | jq '.' > google-credentials.json
           chmod 600 google-credentials.json
           if ! jq -e . google-credentials.json > /dev/null; then
             echo "Invalid JSON in credentials file"
