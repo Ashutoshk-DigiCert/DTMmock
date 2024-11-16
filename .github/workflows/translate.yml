@@ -62,7 +62,7 @@ jobs:
 
       - name: Create and Verify Google Credentials File
         run: |
-          echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}' | jq '.' > google-credentials.json
+          echo '${{ secrets.GOOGLE_CREDENTIALS }}' | jq '.' > google-credentials.json
           chmod 600 google-credentials.json
           if ! jq -e . google-credentials.json > /dev/null; then
             echo "Invalid JSON in credentials file"
@@ -95,6 +95,17 @@ jobs:
             -PpreviousFile=src/main/resources/messages_en.properties.bak \
             --info
 
+      - name: Configure Git
+        run: |
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "actions@github.com"
+
+      - name: Stage and Commit Changes
+        run: |
+          git add src/main/resources/messages_*.properties
+          git add src/main/resources/glossaries/*.csv
+          git commit -m "chore: Update translations [skip ci]" || echo "No changes to commit"
+
       - name: Check for Changes
         id: check-for-changes
         run: |
@@ -109,10 +120,11 @@ jobs:
           title: "chore: Update translations for PR #${{ github.event.pull_request.number }}"
           body: |
             Automated translation updates for changes in:
-            ${needs.check-changes.outputs.properties_changed == 'true' && '- messages_en.properties' || ''}
-            ${needs.check-changes.outputs.glossaries_changed == 'true' && '- glossaries files' || ''}
+            ${{ needs.check-changes.outputs.properties_changed == 'true' && '- messages_en.properties' || '' }}
+            ${{ needs.check-changes.outputs.glossaries_changed == 'true' && '- glossaries files' || '' }}
             
             Original PR: #${{ github.event.pull_request.number }}
           branch: translation-updates-${{ github.event.pull_request.number }}
           base: ${{ github.event.pull_request.head.ref }}
           labels: automated,translations
+          delete-branch: true
