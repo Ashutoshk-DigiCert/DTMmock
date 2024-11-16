@@ -57,8 +57,21 @@ jobs:
       - name: Setup Gradle
         uses: gradle/gradle-build-action@v2
 
+      - name: Install jq
+        run: sudo apt-get install -y jq
+
       - name: Create Google Credentials File
-        run: echo "${{ secrets.GOOGLE_CREDENTIALS }}" > google-credentials.json
+        run: |
+          echo '${{ secrets.GOOGLE_CREDENTIALS }}' > google-credentials.json
+          chmod 600 google-credentials.json
+
+      - name: Validate Google Credentials
+        run: |
+          if [ ! -s google-credentials.json ]; then
+            echo "Error: google-credentials.json is empty"
+            exit 1
+          fi
+          jq . google-credentials.json > /dev/null
 
       - name: Create backup of current messages_en.properties
         if: needs.check-changes.outputs.properties_changed == 'true'
@@ -67,19 +80,28 @@ jobs:
       - name: Process Glossary Changes
         if: needs.check-changes.outputs.glossaries_changed == 'true'
         run: |
+          export GOOGLE_APPLICATION_CREDENTIALS="${GITHUB_WORKSPACE}/google-credentials.json"
           ./gradlew uploadGlossaryFile -PtargetLanguages=${{ needs.check-changes.outputs.changed_glossaries }}
         env:
-          GOOGLE_APPLICATION_CREDENTIALS: google-credentials.json
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
 
       - name: Run Delta Translation
         if: needs.check-changes.outputs.properties_changed == 'true'
         run: |
-          ./gradlew translatePropertiesDelta -PtargetLanguages=hi,fr,de,it,ru -PpreviousFile=src/main/resources/messages_en.properties.bak
+          export GOOGLE_APPLICATION_CREDENTIALS="${GITHUB_WORKSPACE}/google-credentials.json"
+          ./gradlew translatePropertiesDelta \
+            -PtargetLanguages=hi,fr,de,it,ru \
+            -PpreviousFile=src/main/resources/messages_en.properties.bak
         env:
-          GOOGLE_APPLICATION_CREDENTIALS: google-credentials.json
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Check for Changes
+        id: check-for-changes
+        run: |
+          git diff --exit-code || echo "changes_detected=true" >> $GITHUB_OUTPUT
 
       - name: Create Pull Request
-        if: success()
+        if: steps.check-for-changes.outputs.changes_detected == 'true'
         uses: peter-evans/create-pull-request@v5
         with:
           token: ${{ secrets.WORKFLOW_TOKEN }}
