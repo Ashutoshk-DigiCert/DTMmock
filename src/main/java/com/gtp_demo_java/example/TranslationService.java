@@ -188,11 +188,14 @@ public class TranslationService {
             String cleanContent = cleanContentForTranslation(contentToTranslate);
             logger.trace("Cleaned content for translation: {}", cleanContent);
 
+            // Normalize the content for glossary lookup
+            String normalizedContent = cleanContent.toLowerCase();
+
             TranslateTextGlossaryConfig glossaryConfig = TranslateTextGlossaryConfig.newBuilder()
                     .setGlossary(glossaryName)
                     .build();
 
-            TranslateTextRequest request = buildTranslationRequest(parent, targetLanguage, cleanContent, glossaryConfig);
+            TranslateTextRequest request = buildTranslationRequest(parent, targetLanguage, normalizedContent, glossaryConfig);
 
             TranslateTextResponse response = client.translateText(request);
             String translatedText = response.getGlossaryTranslations(0).getTranslatedText().trim();

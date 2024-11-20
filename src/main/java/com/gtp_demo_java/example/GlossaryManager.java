@@ -10,9 +10,12 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -95,7 +98,20 @@ public class GlossaryManager {
                     .build();
 
             Path path = Paths.get(filePath);
-            byte[] content = Files.readAllBytes(path);
+            List<String> lines = Files.readAllLines(path, StandardCharsets.UTF_8);
+            List<String> normalizedLines = new ArrayList<>();
+
+            for (String line : lines) {
+                String[] parts = line.split(",", 2);
+                if (parts.length == 2) {
+                    String normalizedLine = parts[0].toLowerCase() + "," + parts[1].toLowerCase();
+                    normalizedLines.add(normalizedLine);
+                } else {
+                    normalizedLines.add(line);
+                }
+            }
+
+            byte[] content = String.join("\n", normalizedLines).getBytes(StandardCharsets.UTF_8);
             logger.debug("Read {} bytes from glossary file", content.length);
 
             Blob blob = storage.create(blobInfo, content);
