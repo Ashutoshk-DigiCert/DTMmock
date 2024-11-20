@@ -2,13 +2,33 @@ name: Translation Automation
 
 on:
   pull_request:
+    types: [opened, synchronize, closed]
     branches:
       - 'main'
+      - '*translations/*'
     paths:
       - 'src/main/resources/messages_en.properties'
       - 'src/main/resources/glossaries/glossaries_*.csv'
 
 jobs:
+  track-rejected:
+    if: github.event.action == 'closed' && github.event.pull_request.merged == false && contains(github.event.pull_request.head.ref, 'translations/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Track rejected translations
+        run: |
+          TRACKING_FILE=".rejected-translations"
+          
+          git diff ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} -- src/main/resources/messages_*.properties >> $TRACKING_FILE
+          
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "actions@github.com"
+          git add $TRACKING_FILE
+          git commit -m "Track rejected translations"
+          git push
+
   check-changes:
     runs-on: ubuntu-latest
     outputs:
