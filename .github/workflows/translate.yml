@@ -16,6 +16,7 @@ jobs:
       glossaries_changed: ${{ steps.check-files.outputs.glossaries_changed }}
       changed_glossaries: ${{ steps.check-files.outputs.changed_glossaries }}
       diff_count: ${{ steps.check-diff.outputs.diff_count }}
+      processed_changes: ${{ steps.check-processed-changes.outputs.processed_changes }}
     steps:
       - uses: actions/checkout@v3
         with:
@@ -44,6 +45,17 @@ jobs:
         run: |
           DIFF_COUNT=$(git diff ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} -- src/main/resources/messages_en.properties | grep '^[+-]' | grep -v '^[+-]\{3\}' | wc -l)
           echo "diff_count=$DIFF_COUNT" >> $GITHUB_OUTPUT
+
+      - name: Check processed changes
+        id: check-processed-changes
+        run: |
+          # Check if there is a marker file indicating processed changes
+          if [ -f .processed_changes ]; then
+            PROCESSED_CHANGES=$(cat .processed_changes)
+          else
+            PROCESSED_CHANGES=""
+          fi
+          echo "processed_changes=$PROCESSED_CHANGES" >> $GITHUB_OUTPUT
 
   process-translations:
     needs: check-changes
@@ -76,6 +88,13 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ env.GOOGLE_APPLICATION_CREDENTIALS }}
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
         run: |
+          # Filter out changes that have already been processed
+          if [ -n "${{ needs.check-changes.outputs.processed_changes }}" ]; then
+            git diff ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} -- src/main/resources/messages_en.properties | grep '^[+-]' | grep -v '^[+-]\{3\}' | grep -v "${{ needs.check-changes.outputs.processed_changes }}" > filtered_diff.txt
+          else
+            git diff ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} -- src/main/resources/messages_en.properties | grep '^[+-]' | grep -v '^[+-]\{3\}' > filtered_diff.txt
+          fi
+          
           ./gradlew translatePropertiesDelta \
             -PtargetLanguages=hi,fr,de,it,ru \
             -PpreviousFile=src/main/resources/messages_en.properties.bak \
@@ -127,3 +146,12 @@ jobs:
           base: ${{ github.event.pull_request.head.ref }}
           labels: automated-translation
           delete-branch: true
+
+      - name: Mark changes as processed
+        if: steps.check-for-changes.outputs.changes_detected == 'true'
+        run: |
+          # Save the current commit hash as a marker for processed changes
+          echo "$(git rev-parse HEAD)" > .processed_changes
+          git add .processed_changes
+          git commit -m "Mark changes as processed"
+          git push origin ${{ github.event.pull_request.head.ref }}
