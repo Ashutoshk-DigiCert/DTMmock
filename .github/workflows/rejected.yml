@@ -7,11 +7,14 @@ on:
 jobs:
   update-bak-on-rejection:
     runs-on: ubuntu-latest
-    if: ${{ github.event.pull_request.merged == false && github.event.pull_request.labels.*.name contains 'automated-translation' }}
+    if: ${{ !github.event.pull_request.merged && contains(toJson(github.event.pull_request.labels), '"name":"automated-translation"') }}
     steps:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
+
+      - name: Debug Labels
+        run: "echo \"Labels: ${{ github.event.pull_request.labels }}\""
 
       - name: Update BAK File
         run: |
