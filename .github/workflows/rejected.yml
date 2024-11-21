@@ -14,7 +14,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: jakejarvis/install-jq-action@v1
+      - name: Install jq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
 
       - name: Check Labels
         id: check-labels-step
