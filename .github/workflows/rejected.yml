@@ -1,35 +1,12 @@
-name: Update BAK on Rejected Translation PR
+name: Verify Workflow Trigger on PR Closure
 
 on:
   pull_request:
     types: [closed]
 
 jobs:
-  update-bak-on-rejection:
+  verify-trigger:
     runs-on: ubuntu-latest
-    if: ${{ github.event.pull_request.merged == false && contains(github.event.pull_request.labels.*.name, 'automated-translation') }}
     steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: Debug Labels
-        run: "echo \"Labels: ${{ github.event.pull_request.labels }}\""
-
-      - name: Update BAK File via API
-        uses: actions/github-script@v6
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const fs = require('fs');
-            const path = 'src/main/resources/messages_en.properties.bak';
-            const content = fs.readFileSync('src/main/resources/messages_en.properties', 'utf8');
-            const encodedContent = Buffer.from(content).toString('base64');
-            github.rest.repos.createOrUpdateFileContents({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              path: path,
-              message: 'Update BAK file after rejected translation PR #' + context.payload.pull_request.number,
-              content: encodedContent,
-              branch: context.payload.pull_request.base.ref,
-            });
+      - name: Confirm Workflow Execution
+        run: echo "Workflow triggered on PR closure."
