@@ -13,29 +13,13 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
-
-      - name: Install jq
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y jq
-
-      - name: Check jq Version
-        run: |
-          jq --version
-
-      - name: Debug Event
-        run: |
-          echo "Event: ${{ toJson(github.event) }}"
-
-      - name: Debug Labels
-        run: |
-          echo "Labels: ${{ toJson(github.event.pull_request.labels) }}"
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Check Labels
         id: check-labels-step
         run: |
-          LABELS=$(echo ${{ toJson(github.event.pull_request.labels) }} | jq -r '.[] | .name')
-          echo "Labels: $LABELS"
+          LABELS=$(jq -r '.pull_request.labels[].name' <<< '${{ toJson(github.event) }}')
+          echo "Labels found: $LABELS"
           if echo "$LABELS" | grep -qw 'automated-translation'; then
             echo "has_label=true" >> $GITHUB_OUTPUT
           else
@@ -50,14 +34,13 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Update BAK File
         run: |
           cp src/main/resources/messages_en.properties src/main/resources/messages_en.properties.bak
-          git config --global user.name "GitHub Actions Bot"
-          git config --global user.email "actions@github.com"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/main/resources/messages_en.properties.bak
           git commit -m "Update BAK file after rejected translation PR #${{ github.event.pull_request.number }}"
           git push
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
