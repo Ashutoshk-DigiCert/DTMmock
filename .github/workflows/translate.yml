@@ -1,5 +1,4 @@
 name: Translation Automation
-
 on:
   pull_request:
     branches:
@@ -7,7 +6,6 @@ on:
     paths:
       - 'src/main/resources/messages_en.properties'
       - 'src/main/resources/glossaries/glossaries_*.csv'
-
 jobs:
   check-changes:
     runs-on: ubuntu-latest
@@ -20,36 +18,27 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
-
       - name: Check changed files
         id: check-files
         run: |
-          BEFORE_SHA=${{ github.event.pull_request.before }}
-          AFTER_SHA=${{ github.event.pull_request.after }}
-          
-          if git diff --name-only $BEFORE_SHA $AFTER_SHA | grep -q "src/main/resources/messages_en.properties"; then
+          if git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | grep -q "src/main/resources/messages_en.properties"; then
             echo "properties_changed=true" >> $GITHUB_OUTPUT
           else
             echo "properties_changed=false" >> $GITHUB_OUTPUT
           fi
-          
-          if git diff --name-only $BEFORE_SHA $AFTER_SHA | grep -q "src/main/resources/glossaries/glossaries_.*\.csv"; then
+          if git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | grep -q "src/main/resources/glossaries/glossaries_.*\.csv"; then
             echo "glossaries_changed=true" >> $GITHUB_OUTPUT
-            CHANGED_GLOSSARIES=$(git diff --name-only $BEFORE_SHA $AFTER_SHA | grep "glossaries_.*\.csv" | sed -E 's/.*glossaries_([a-z]{2})\.csv/\1/' | tr '\n' ',' | sed 's/,$//')
+            CHANGED_GLOSSARIES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | grep "glossaries_.*\.csv" | sed -E 's/.*glossaries_([a-z]{2})\.csv/\1/' | tr '\n' ',' | sed 's/,$//')
             echo "changed_glossaries=$CHANGED_GLOSSARIES" >> $GITHUB_OUTPUT
           else
             echo "glossaries_changed=false" >> $GITHUB_OUTPUT
             echo "changed_glossaries=''" >> $GITHUB_OUTPUT
           fi
-
       - name: Check diff content
         id: check-diff
         run: |
-          BEFORE_SHA=${{ github.event.pull_request.before }}
-          AFTER_SHA=${{ github.event.pull_request.after }}
-          DIFF_COUNT=$(git diff $BEFORE_SHA $AFTER_SHA -- src/main/resources/messages_en.properties | grep '^[+-]' | grep -v '^[+-]\{3\}' | wc -l)
+          DIFF_COUNT=$(git diff ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} -- src/main/resources/messages_en.properties | grep '^[+-]' | grep -v '^[+-]\{3\}' | wc -l)
           echo "diff_count=$DIFF_COUNT" >> $GITHUB_OUTPUT
-
   process-translations:
     needs: check-changes
     if: needs.check-changes.outputs.properties_changed == 'true' || needs.check-changes.outputs.glossaries_changed == 'true'
@@ -59,22 +48,18 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.ref }}
           token: ${{ secrets.WORKFLOW_TOKEN }}
-
       - name: Set up JDK 17
         uses: actions/setup-java@v3
         with:
           java-version: '17'
           distribution: 'temurin'
-
       - name: Setup Gradle
         uses: gradle/gradle-build-action@v2
-
       - name: Create and Verify Google Credentials
         run: |
           echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}' > google-credentials.json
           chmod 600 google-credentials.json
           echo "GOOGLE_APPLICATION_CREDENTIALS=${GITHUB_WORKSPACE}/google-credentials.json" >> $GITHUB_ENV
-
       - name: Process Translations
         if: needs.check-changes.outputs.properties_changed == 'true' && needs.check-changes.outputs.diff_count > 0
         env:
@@ -85,7 +70,6 @@ jobs:
             -PtargetLanguages=hi,fr,de,it,ru \
             -PpreviousFile=src/main/resources/messages_en.properties.bak \
             --info
-
       - name: Process Glossary Changes
         if: needs.check-changes.outputs.glossaries_changed == 'true'
         env:
@@ -95,37 +79,31 @@ jobs:
           ./gradlew uploadGlossaryFile \
             -PtargetLanguages=${{ needs.check-changes.outputs.changed_glossaries }} \
             --info
-
       - name: Prepare Git Changes
         run: |
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
           rm -f google-credentials.json
-          
           git add src/main/resources/messages_*.properties
           git add -f src/main/resources/glossaries/*.csv
-
       - name: Check for Changes
         id: check-for-changes
         run: |
           if [[ -n "$(git status --porcelain src/main/resources/messages_*.properties)" ]]; then
             echo "changes_detected=true" >> $GITHUB_OUTPUT
           fi
-
       - name: Create Pull Request
         if: steps.check-for-changes.outputs.changes_detected == 'true'
         uses: peter-evans/create-pull-request@v5
         with:
           token: ${{ secrets.WORKFLOW_TOKEN }}
-          commit-message: "🌐 Update translations"
-          title: "🌐 Update translations for PR #${{ github.event.pull_request.number }}"
+          commit-message: ":globe_with_meridians: Update translations"
+          title: ":globe_with_meridians: Update translations for PR #${{ github.event.pull_request.number }}"
           body: |
             ## Automated Translation Updates
-            
             Changes detected in:
             ${{ needs.check-changes.outputs.properties_changed == 'true' && '- messages_en.properties' || '' }}
             ${{ needs.check-changes.outputs.glossaries_changed == 'true' && '- glossaries files' || '' }}
-            
             Number of changes: ${{ needs.check-changes.outputs.diff_count }}
             Original PR: #${{ github.event.pull_request.number }}
           branch: translations/pr-${{ github.event.pull_request.number }}
