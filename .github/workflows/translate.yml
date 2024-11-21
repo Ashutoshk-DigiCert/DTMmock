@@ -11,7 +11,10 @@ on:
 
 jobs:
   handle-pr-closure:
-    if: github.event.action == 'closed' && contains(github.event.pull_request.labels.*.name, 'automated-translation')
+    if: |
+      github.event.action == 'closed' && 
+      (contains(github.event.pull_request.labels.*.name, 'automated-translation') || 
+       startsWith(github.event.pull_request.head.ref, 'translations/pr-'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
