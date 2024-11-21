@@ -19,10 +19,22 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y jq
 
+      - name: Check jq Version
+        run: |
+          jq --version
+
+      - name: Debug Event
+        run: |
+          echo "Event: ${{ toJson(github.event) }}"
+
+      - name: Debug Labels
+        run: |
+          echo "Labels: ${{ toJson(github.event.pull_request.labels) }}"
+
       - name: Check Labels
         id: check-labels-step
         run: |
-          LABELS=$(echo ${{ github.event.pull_request.labels }} | jq -r '.[] | .name')
+          LABELS=$(echo ${{ toJson(github.event.pull_request.labels) }} | jq -r '.[] | .name')
           echo "Labels: $LABELS"
           if echo "$LABELS" | grep -qw 'automated-translation'; then
             echo "has_label=true" >> $GITHUB_OUTPUT
