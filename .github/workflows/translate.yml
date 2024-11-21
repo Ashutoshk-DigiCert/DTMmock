@@ -97,6 +97,7 @@ jobs:
           fi
       - name: Create Pull Request
         if: steps.check-for-changes.outputs.changes_detected == 'true'
+        id: create_pr
         uses: peter-evans/create-pull-request@v5
         with:
           token: ${{ secrets.WORKFLOW_TOKEN }}
