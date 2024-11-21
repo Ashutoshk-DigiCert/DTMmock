@@ -5,16 +5,36 @@ on:
     types: [closed]
 
 jobs:
-  update-bak-on-rejection:
+  check-labels:
     runs-on: ubuntu-latest
-    if: ${{ !github.event.pull_request.merged && contains(toJson(github.event.pull_request.labels), '"name":"automated-translation"') }}
+    outputs:
+      has_label: ${{ steps.check-labels-step.outputs.has_label }}
     steps:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
-      - name: Debug Labels
-        run: "echo \"Labels: ${{ github.event.pull_request.labels }}\""
+      - uses: jakejarvis/install-jq-action@v1
+
+      - name: Check Labels
+        id: check-labels-step
+        run: |
+          LABELS=$(echo ${{ github.event.pull_request.labels }} | jq -r '.[] | .name')
+          echo "Labels: $LABELS"
+          if echo "$LABELS" | grep -qw 'automated-translation'; then
+            echo "has_label=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_label=false" >> $GITHUB_OUTPUT
+          fi
+
+  update-bak-on-rejection:
+    needs: check-labels
+    runs-on: ubuntu-latest
+    if: ${{ !github.event.pull_request.merged && needs.check-labels.outputs.has_label == 'true' }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
       - name: Update BAK File
         run: |
