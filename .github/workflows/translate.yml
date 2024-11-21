@@ -1,19 +1,27 @@
 name: Translation Processing
 
 on:
-  workflow_call:
+  workflow_dispatch:
     inputs:
       properties_changed:
         type: string
+        description: 'Whether properties files changed'
+        required: true
         default: 'false'
       glossaries_changed:
         type: string
+        description: 'Whether glossaries changed'
+        required: true
         default: 'false'
       changed_glossaries:
         type: string
+        description: 'List of changed glossary languages'
+        required: true
         default: ''
       diff_count:
         type: string
+        description: 'Number of changes in properties file'
+        required: true
         default: '0'
 
 jobs:
