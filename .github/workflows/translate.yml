@@ -24,17 +24,18 @@ jobs:
       - name: Check changed files
         id: check-files
         run: |
-          MERGE_BASE=$(git merge-base ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }})
+          BEFORE_SHA=${{ github.event.pull_request.before }}
+          AFTER_SHA=${{ github.event.pull_request.after }}
           
-          if git diff --name-only $MERGE_BASE ${{ github.event.pull_request.head.sha }} | grep -q "src/main/resources/messages_en.properties"; then
+          if git diff --name-only $BEFORE_SHA $AFTER_SHA | grep -q "src/main/resources/messages_en.properties"; then
             echo "properties_changed=true" >> $GITHUB_OUTPUT
           else
             echo "properties_changed=false" >> $GITHUB_OUTPUT
           fi
           
-          if git diff --name-only $MERGE_BASE ${{ github.event.pull_request.head.sha }} | grep -q "src/main/resources/glossaries/glossaries_.*\.csv"; then
+          if git diff --name-only $BEFORE_SHA $AFTER_SHA | grep -q "src/main/resources/glossaries/glossaries_.*\.csv"; then
             echo "glossaries_changed=true" >> $GITHUB_OUTPUT
-            CHANGED_GLOSSARIES=$(git diff --name-only $MERGE_BASE ${{ github.event.pull_request.head.sha }} | grep "glossaries_.*\.csv" | sed -E 's/.*glossaries_([a-z]{2})\.csv/\1/' | tr '\n' ',' | sed 's/,$//')
+            CHANGED_GLOSSARIES=$(git diff --name-only $BEFORE_SHA $AFTER_SHA | grep "glossaries_.*\.csv" | sed -E 's/.*glossaries_([a-z]{2})\.csv/\1/' | tr '\n' ',' | sed 's/,$//')
             echo "changed_glossaries=$CHANGED_GLOSSARIES" >> $GITHUB_OUTPUT
           else
             echo "glossaries_changed=false" >> $GITHUB_OUTPUT
@@ -44,8 +45,9 @@ jobs:
       - name: Check diff content
         id: check-diff
         run: |
-          MERGE_BASE=$(git merge-base ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }})
-          DIFF_COUNT=$(git diff $MERGE_BASE ${{ github.event.pull_request.head.sha }} -- src/main/resources/messages_en.properties | grep '^[+-]' | grep -v '^[+-]\{3\}' | wc -l)
+          BEFORE_SHA=${{ github.event.pull_request.before }}
+          AFTER_SHA=${{ github.event.pull_request.after }}
+          DIFF_COUNT=$(git diff $BEFORE_SHA $AFTER_SHA -- src/main/resources/messages_en.properties | grep '^[+-]' | grep -v '^[+-]\{3\}' | wc -l)
           echo "diff_count=$DIFF_COUNT" >> $GITHUB_OUTPUT
 
   process-translations:
