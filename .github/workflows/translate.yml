@@ -121,15 +121,10 @@ jobs:
         with:
           script: |
             const originalPrNumber = ${{ github.event.pull_request.number }};
-            const translationPrNumber = '${{ steps.create_pr.outputs.pull_request_number || '' }}';
-            let commentBody = `Translation PR: #${translationPrNumber}`;
-            if (translationPrNumber === '') {
-              commentBody = `Translation PR: N/A`;
-            }
+            const translationPrNumber = '${{ steps.create_pr.outputs.pull_request_number || 'N/A' }}';
             github.rest.issues.createComment({
               issue_number: originalPrNumber,
               owner: context.payload.repository.owner.login,
               repo: context.payload.repository.name,
-              body: commentBody
+              body: `Translation PR: #${translationPrNumber}`
             });
-          github-token: ${{ secrets.GITHUB_TOKEN }}
