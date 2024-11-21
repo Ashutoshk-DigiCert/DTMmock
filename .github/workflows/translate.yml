@@ -114,16 +114,22 @@ jobs:
           base: ${{ github.event.pull_request.head.ref }}
           labels: automated-translation
           delete-branch: true
+        continue-on-error: true
       - name: Comment on Original PR with Translation PR Link
         if: steps.check-for-changes.outputs.changes_detected == 'true'
         uses: actions/github-script@v6
         with:
           script: |
             const originalPrNumber = ${{ github.event.pull_request.number }};
-            const translationPrNumber = ${{ steps.create_pr.outputs.pull_request_number }};
+            const translationPrNumber = '${{ steps.create_pr.outputs.pull_request_number || '' }}';
+            let commentBody = `Translation PR: #${translationPrNumber}`;
+            if (translationPrNumber === '') {
+              commentBody = `Translation PR: N/A`;
+            }
             github.rest.issues.createComment({
               issue_number: originalPrNumber,
               owner: context.payload.repository.owner.login,
               repo: context.payload.repository.name,
-              body: `Translation PR: #${translationPrNumber}`
+              body: commentBody
             });
+          github-token: ${{ secrets.GITHUB_TOKEN }}
