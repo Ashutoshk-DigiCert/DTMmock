@@ -30,7 +30,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          repository: 'Ashutoshk-DigiCert/mock_spring_project' # Replace with your original repository
+          repository: 'Ashutoshk-DigiCert/DTMmock' # Replace with your original repository
           token: ${{ secrets.GITHUB_TOKEN }}
           ref: ${{ github.event.inputs.ref }} # Get the PR head ref from the original workflow
       - name: Set up JDK 17
