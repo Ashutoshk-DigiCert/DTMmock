@@ -30,9 +30,8 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          repository: 'Ashutoshk-DigiCert/DTMmock'  # Corrected repository
+          repository: 'Ashutoshk-DigiCert/mock_spring_project' # Replace with your original repository
           token: ${{ secrets.GITHUB_TOKEN }}
-          path: DTMmock  # Add this line
           ref: ${{ github.event.inputs.ref }} # Get the PR head ref from the original workflow
       - name: Set up JDK 17
         uses: actions/setup-java@v3
@@ -46,6 +45,8 @@ jobs:
           echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}' > google-credentials.json
           chmod 600 google-credentials.json
           echo "GOOGLE_APPLICATION_CREDENTIALS=${GITHUB_WORKSPACE}/google-credentials.json" >> $GITHUB_ENV
+      - name: List Available Gradle Tasks
+        run: ./gradlew tasks
       - name: Process Translations
         if: ${{ inputs.properties_changed == 'true' && inputs.diff_count > 0 }}
         env:
