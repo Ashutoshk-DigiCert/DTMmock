@@ -30,23 +30,29 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          repository: 'Ashutoshk-DigiCert/DTMmock' # Replace with your original repository
+          repository: 'Ashutoshk-DigiCert/mock_spring_project'
           token: ${{ secrets.GITHUB_TOKEN }}
-          ref: ${{ github.event.inputs.ref }} # Get the PR head ref from the original workflow
+          path: source_project
+
       - name: Set up JDK 17
         uses: actions/setup-java@v3
         with:
           java-version: '17'
           distribution: 'temurin'
+
       - name: Setup Gradle
         uses: gradle/gradle-build-action@v2
+
       - name: Create and Verify Google Credentials
         run: |
           echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}' > google-credentials.json
           chmod 600 google-credentials.json
           echo "GOOGLE_APPLICATION_CREDENTIALS=${GITHUB_WORKSPACE}/google-credentials.json" >> $GITHUB_ENV
-      - name: List Available Gradle Tasks
-        run: ./gradlew tasks
+
+      - name: Copy Source Files
+        run: |
+          cp -r source_project/src/main/resources/* src/main/resources/
+
       - name: Process Translations
         if: ${{ inputs.properties_changed == 'true' && inputs.diff_count > 0 }}
         env:
@@ -57,6 +63,7 @@ jobs:
             -PtargetLanguages=hi,fr,de,it,ru \
             -PpreviousFile=src/main/resources/messages_en.properties.bak \
             --info
+
       - name: Process Glossary Changes
         if: ${{ inputs.glossaries_changed == 'true' }}
         env:
@@ -66,13 +73,16 @@ jobs:
           ./gradlew uploadGlossaryFile \
             -PtargetLanguages=${{ inputs.changed_glossaries }} \
             --info
-      - name: Prepare Translated Files
+
+      - name: Save Translations
         run: |
           mkdir -p translated-files
-          cp src/main/resources/messages_*.properties translated-files/
-          cp src/main/resources/glossaries/*.csv translated-files/
-      - name: Upload Translated Files
+          cp -r src/main/resources/messages_*.properties translated-files/
+          cp -r src/main/resources/glossaries/*.csv translated-files/
+
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v3
         with:
           name: translated-files
           path: translated-files/
+          retention-days: 1
