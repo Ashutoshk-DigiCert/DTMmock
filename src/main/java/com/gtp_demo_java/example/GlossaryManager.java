@@ -142,10 +142,10 @@ public class GlossaryManager {
                 return;
             }
 
-            logger.info("Step 1/3: Uploading glossary file to Cloud Storage");
+            logger.info("Step 1/4: Uploading glossary file to Cloud Storage");
             uploadGlossaryToCloudStorage(glossaryFilePath, targetLanguage);
 
-            logger.info("Step 2/3: Removing existing glossary if present");
+            logger.info("Step 2/4: Removing existing glossary if present");
             try {
                 deleteGlossary(targetLanguage);
             } catch (IOException e) {
@@ -156,13 +156,23 @@ public class GlossaryManager {
                 }
             }
 
-            logger.info("Step 3/3: Creating new glossary");
+            logger.info("Step 3/4: Creating new glossary");
             try (TranslationServiceClient client = TranslationServiceClient.create()) {
                 LocationName parent = LocationName.of(configManager.getProjectId(), configManager.getLocation());
                 createGlossary(client, parent, targetLanguage);
             }
 
-            logger.info("Glossary update completed successfully for language: {}", targetLanguage);
+            logger.info("Step 4/4: Running translation with updated glossary");
+            TranslationService translationService = new TranslationService(configManager);
+            List<PropertyEntry> originalEntries = FileIO.readPropertiesFile(configManager.getInputFilePath());
+            List<PropertyEntry> translatedEntries = translationService.translateProperties(originalEntries, targetLanguage, null);
+
+            String outputPropsFile = configManager.getOutputFilePath(targetLanguage);
+            Path outputPath = Paths.get(outputPropsFile);
+            Files.createDirectories(outputPath.getParent());
+            FileIO.writePropertiesUtf8(translatedEntries, outputPath.toString());
+
+            logger.info("Glossary update and translation completed successfully for language: {}", targetLanguage);
         } catch (Exception e) {
             logger.error("Failed to process glossary update: {}", e.getMessage(), e);
             throw new IOException("Glossary update failed", e);
@@ -170,6 +180,7 @@ public class GlossaryManager {
             MDC.remove("targetLanguage");
         }
     }
+
 
     public void createGlossary(TranslationServiceClient client, LocationName parent,
                                 String targetLanguage) throws IOException {
