@@ -57,6 +57,26 @@ jobs:
         run: |
           cp -r source_project/src/main/resources/* src/main/resources/
 
+      - name: Checkout DTMmock repository
+        uses: actions/checkout@v3
+        with:
+          repository: 'Ashutoshk-DigiCert/DTMmock'
+          path: 'dtm_project'
+
+      - name: Checkout source repository
+        uses: actions/checkout@v3
+        with:
+          repository: 'Ashutoshk-DigiCert/mock_spring_project'
+          path: 'source_project'
+
+      - name: Run translation
+        working-directory: ./dtm_project
+        run: |
+          ./gradlew translatePropertiesDelta \
+            -PtargetLanguages=hi,fr,de,it,ru \
+            -PpreviousFile=../source_project/src/main/resources/messages_en.properties.bak \
+            --info
+
       - name: Process Translations
         if: ${{ inputs.properties_changed == 'true' && inputs.diff_count > 0 }}
         env:
