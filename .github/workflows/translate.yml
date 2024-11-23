@@ -49,7 +49,11 @@ jobs:
           chmod 600 google-credentials.json
           echo "GOOGLE_APPLICATION_CREDENTIALS=${GITHUB_WORKSPACE}/google-credentials.json" >> $GITHUB_ENV
 
-      - name: Copy Source Files
+      - name: Create directory structure
+        run: |
+          mkdir -p src/main/resources/
+
+      - name: Copy files
         run: |
           cp -r source_project/src/main/resources/* src/main/resources/
 
