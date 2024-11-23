@@ -1,21 +1,42 @@
 name: Translate Files
 
 on:
+  workflow_dispatch:
+    inputs:
+      properties_changed:
+        type: boolean
+        required: true
+        description: 'Indicates if properties files have been modified'
+      glossaries_changed:
+        type: boolean
+        required: true
+        description: 'Indicates if glossary files have been modified'
+      changed_glossaries:
+        type: string
+        required: false
+        description: 'List of modified glossary languages'
+      source_branch:
+        type: string
+        required: true
+        description: 'Source branch containing the changes'
   workflow_call:
     inputs:
       properties_changed:
         type: boolean
         required: true
+        description: 'Indicates if properties files have been modified'
       glossaries_changed:
         type: boolean
         required: true
+        description: 'Indicates if glossary files have been modified'
       changed_glossaries:
         type: string
         required: false
+        description: 'List of modified glossary languages'
       source_branch:
         type: string
         required: true
-  workflow_dispatch:
+        description: 'Source branch containing the changes'
 
 jobs:
   translate:
