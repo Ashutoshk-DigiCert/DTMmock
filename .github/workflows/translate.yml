@@ -53,28 +53,21 @@ jobs:
         run: |
           mkdir -p src/main/resources/
 
-      - name: Copy files
+      - name: Verify file structure
         run: |
-          cp -r source_project/src/main/resources/* src/main/resources/
+          ls -R source_project/src/main/resources/
+          mkdir -p src/main/resources/
 
-      - name: Checkout DTMmock repository
-        uses: actions/checkout@v3
-        with:
-          repository: 'Ashutoshk-DigiCert/DTMmock'
-          path: 'dtm_project'
-
-      - name: Checkout source repository
-        uses: actions/checkout@v3
-        with:
-          repository: 'Ashutoshk-DigiCert/mock_spring_project'
-          path: 'source_project'
+      - name: Copy source files for translation
+        run: |
+          cp source_project/src/main/resources/messages_en.properties src/main/resources/
+          cp -r source_project/src/main/resources/glossaries src/main/resources/ || true
 
       - name: Run translation
-        working-directory: ./dtm_project
         run: |
           ./gradlew translatePropertiesDelta \
             -PtargetLanguages=hi,fr,de,it,ru \
-            -PpreviousFile=../source_project/src/main/resources/messages_en.properties.bak \
+            -PpreviousFile=source_project/src/main/resources/messages_en.properties.bak \
             --info
 
       - name: Process Translations
