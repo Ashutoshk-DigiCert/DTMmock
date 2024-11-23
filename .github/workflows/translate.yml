@@ -1,40 +1,29 @@
-name: Translation Processing
+name: Translate Files
 
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
       properties_changed:
-        type: string
-        description: 'Whether properties files changed'
+        type: boolean
         required: true
-        default: 'false'
       glossaries_changed:
-        type: string
-        description: 'Whether glossaries changed'
+        type: boolean
         required: true
-        default: 'false'
       changed_glossaries:
         type: string
-        description: 'List of changed glossary languages'
-        required: true
-        default: ''
-      diff_count:
+        required: false
+      source_branch:
         type: string
-        description: 'Number of changes in properties file'
         required: true
-        default: '0'
 
 jobs:
-  process-translations:
+  translate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-        with:
-          repository: 'Ashutoshk-DigiCert/mock_spring_project'
-          token: ${{ secrets.GITHUB_TOKEN }}
-          path: source_project
+      - name: Checkout DTMmock
+        uses: actions/checkout@v3
 
-      - name: Set up JDK 17
+      - name: Setup JDK 17
         uses: actions/setup-java@v3
         with:
           java-version: '17'
@@ -49,36 +38,8 @@ jobs:
           chmod 600 google-credentials.json
           echo "GOOGLE_APPLICATION_CREDENTIALS=${GITHUB_WORKSPACE}/google-credentials.json" >> $GITHUB_ENV
 
-      - name: Create directory structure
-        run: |
-          mkdir -p src/main/resources/
-
-      - name: Verify file structure
-        run: |
-          ls -R source_project/src/main/resources/
-          mkdir -p src/main/resources/
-
-      - name: Copy source files for translation
-        run: |
-          cp source_project/src/main/resources/messages_en.properties src/main/resources/
-          cp -r source_project/src/main/resources/glossaries src/main/resources/ || true
-
-      - name: Setup Gradle
-        run: |
-          cd DTMmock
-          chmod +x gradlew
-
-      - name: Run translation
-        working-directory: ./dtm_project
-        run: |
-          ./gradlew translatePropertiesDelta \
-            -PtargetLanguages=hi,fr,de,it,ru \
-            -PpreviousFile=../source_project/src/main/resources/messages_en.properties.bak \
-            --info
-      
-
       - name: Process Translations
-        if: ${{ inputs.properties_changed == 'true' && inputs.diff_count > 0 }}
+        if: ${{ inputs.properties_changed == 'true' }}
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ env.GOOGLE_APPLICATION_CREDENTIALS }}
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
@@ -98,15 +59,8 @@ jobs:
             -PtargetLanguages=${{ inputs.changed_glossaries }} \
             --info
 
-      - name: Save Translations
-        run: |
-          mkdir -p translated-files
-          cp -r src/main/resources/messages_*.properties translated-files/
-          cp -r src/main/resources/glossaries/*.csv translated-files/
-
-      - name: Upload Artifacts
+      - name: Upload Translated Files as Artifact
         uses: actions/upload-artifact@v3
         with:
           name: translated-files
-          path: translated-files/
-          retention-days: 1
+          path: src/main/resources/
