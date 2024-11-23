@@ -63,12 +63,19 @@ jobs:
           cp source_project/src/main/resources/messages_en.properties src/main/resources/
           cp -r source_project/src/main/resources/glossaries src/main/resources/ || true
 
+      - name: Setup Gradle
+        run: |
+          cd dtm_project
+          chmod +x gradlew
+
       - name: Run translation
+        working-directory: ./dtm_project
         run: |
           ./gradlew translatePropertiesDelta \
             -PtargetLanguages=hi,fr,de,it,ru \
-            -PpreviousFile=source_project/src/main/resources/messages_en.properties.bak \
+            -PpreviousFile=../source_project/src/main/resources/messages_en.properties.bak \
             --info
+      
 
       - name: Process Translations
         if: ${{ inputs.properties_changed == 'true' && inputs.diff_count > 0 }}
