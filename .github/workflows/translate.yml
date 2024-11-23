@@ -65,7 +65,7 @@ jobs:
 
       - name: Setup Gradle
         run: |
-          cd dtm_project
+          cd DTMmock
           chmod +x gradlew
 
       - name: Run translation
