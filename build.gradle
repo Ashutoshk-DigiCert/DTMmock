@@ -1,7 +1,6 @@
 plugins {
     id 'java'
     id 'application'
-    id 'com.github.johnrengelman.shadow' version '8.1.1'
 }
 
 def getProps() {
@@ -41,14 +40,6 @@ tasks.withType(JavaCompile).configureEach {
 
 tasks.withType(Javadoc).configureEach {
     options.encoding = 'UTF-8'
-}
-
-tasks.named('shadowJar') {
-    archiveClassifier = ''
-    mergeServiceFiles()
-    manifest {
-        attributes 'Main-Class': props.getProperty('project.mainClass')
-    }
 }
 
 def getCredentialsPath() {
@@ -219,34 +210,6 @@ tasks.register('uploadGlossaryFile', JavaExec) {
             fullArgs.addAll([lang, 'updateGlossary', getGlossaryPath(lang)])
         }
         args = fullArgs
-    }
-
-    systemProperty "file.encoding", "UTF-8"
-    jvmArgs '-Dfile.encoding=UTF-8'
-}
-
-tasks.register('runJar', JavaExec) {
-    group = 'Execution'
-    description = 'Runs the shaded JAR file with specified arguments'
-    classpath = files(tasks.shadowJar)
-
-    doFirst {
-        def targetLanguages = project.findProperty('targetLanguages')
-        if (!targetLanguages) {
-            throw new org.gradle.api.GradleException("Target languages not specified. Use -PtargetLanguages=<language_code1,language_code2,...>")
-        }
-
-        def credentialsPath = getCredentialsPath()
-        environment 'GOOGLE_APPLICATION_CREDENTIALS', credentialsPath
-
-        if (!file(credentialsPath).exists()) {
-            throw new org.gradle.api.GradleException("Google credentials file not found at: ${credentialsPath}. Working directory: ${projectDir}")
-        }
-
-        def languages = targetLanguages.split(',').toList()
-        languages.each { lang -> validateLanguageCode(lang) }
-
-        args = languages
     }
 
     systemProperty "file.encoding", "UTF-8"
