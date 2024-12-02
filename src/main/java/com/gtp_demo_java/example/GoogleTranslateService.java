@@ -148,19 +148,29 @@ public class GoogleTranslateService {
 
     private static void processGlossaryUpdateCommand(String[] args, GlossaryManager glossaryManager) {
         logger.info("Processing multiple glossary updates");
+        String previousFile = null;
+        List<String[]> glossaryUpdates = new ArrayList<>();
 
-        for (int i = 0; i < args.length; i += 3) {
-            if (i + 2 >= args.length) {
-                logger.error("Incomplete arguments for glossary update at position {}", i);
-                continue;
+        // First pass: collect all parameters
+        for (int i = 0; i < args.length; i++) {
+            if (args[i].equals("--previous")) {
+                if (i + 1 < args.length) {
+                    previousFile = args[i + 1];
+                    i++;
+                }
+            } else if (i + 2 < args.length) {
+                glossaryUpdates.add(new String[]{args[i], args[i + 1], args[i + 2]});
+                i += 2;
             }
+        }
 
-            String targetLanguage = args[i];
-            String command = args[i + 1];
-            String glossaryPath = args[i + 2];
+        // Second pass: process updates
+        for (String[] update : glossaryUpdates) {
+            String targetLanguage = update[0];
+            String command = update[1];
+            String glossaryPath = update[2];
 
             MDC.put("targetLanguage", targetLanguage);
-
             try {
                 if (!"updateGlossary".equals(command)) {
                     logger.error("Invalid command '{}' for language {}. Expected 'updateGlossary'",
@@ -177,11 +187,8 @@ public class GoogleTranslateService {
 
                 logger.info("Processing glossary update for language: {} with file: {}",
                         targetLanguage, glossaryPath);
-
-                glossaryManager.updateGlossary(glossaryPath, targetLanguage);
-
+                glossaryManager.updateGlossary(glossaryPath, targetLanguage, previousFile);
                 logger.info("Successfully completed glossary update for language: {}", targetLanguage);
-
             } catch (IOException e) {
                 logger.error("Error updating glossary for language {}: {}", targetLanguage, e.getMessage(), e);
             } finally {
@@ -189,6 +196,7 @@ public class GoogleTranslateService {
             }
         }
     }
+
 
     private static void updateBackupFile(String previousFile, ConfigManager configManager) throws IOException {
         String inputPropsFile = configManager.getInputFilePath();

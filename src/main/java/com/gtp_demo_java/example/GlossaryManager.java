@@ -131,7 +131,7 @@ public class GlossaryManager {
         }
     }
 
-    public void updateGlossary(String glossaryFilePath, String targetLanguage) throws IOException {
+    public void updateGlossary(String glossaryFilePath, String targetLanguage, String previousFile) throws IOException {
         logger.info("Starting glossary update process for language: {}", targetLanguage);
         MDC.put("targetLanguage", targetLanguage);
 
@@ -165,7 +165,7 @@ public class GlossaryManager {
             logger.info("Step 4/4: Running translation with updated glossary");
             TranslationService translationService = new TranslationService(configManager);
             List<PropertyEntry> originalEntries = FileIO.readPropertiesFile(configManager.getInputFilePath());
-            List<PropertyEntry> translatedEntries = translationService.translateProperties(originalEntries, targetLanguage, null);
+            List<PropertyEntry> translatedEntries = translationService.translateProperties(originalEntries, targetLanguage, previousFile);
 
             String outputPropsFile = configManager.getOutputFilePath(targetLanguage);
             Path outputPath = Paths.get(outputPropsFile);

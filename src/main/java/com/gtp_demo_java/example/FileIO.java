@@ -109,6 +109,8 @@ public class FileIO {
         }
     }
 
+    // In the FileIO class, modify the writePropertiesUtf8 method
+
     public static void writePropertiesUtf8(List<PropertyEntry> entries, String filename) throws IOException {
         logger.info("Starting to write {} entries to file: {}", entries.size(), filename);
 
@@ -126,22 +128,61 @@ public class FileIO {
                 entryCount++;
                 logger.trace("Writing entry {}/{} of type: {}", entryCount, entries.size(), entry.type);
 
-                for (String line : entry.lines) {
-                    writer.write(line);
-                    writer.newLine();
+                if (entry.type == PropertyEntry.EntryType.PROPERTY) {
+                    // Join all lines and remove any line continuation characters
+                    String singleLine = String.join(" ", entry.lines)
+                            .replaceAll("\\\\\n\\s*", " ")
+                            .replaceAll("\\s+", " ")
+                            .trim();
+                    writer.write(singleLine);
+                } else {
+                    // For non-property entries (comments, empty lines)
+                    writer.write(String.join("\n", entry.lines));
                 }
+                writer.newLine();
             }
 
             logger.info("Successfully wrote {} entries to file: {}", entries.size(), filename);
-
-            if (logger.isDebugEnabled()) {
-                long fileSize = Files.size(filePath);
-                logger.debug("File statistics - Size: {} bytes, Entries: {}", fileSize, entries.size());
-            }
-
         } catch (IOException e) {
             logger.error("Failed to write properties file: {}. Error: {}", filename, e.getMessage(), e);
             throw new IOException("Error writing properties file: " + filename, e);
         }
     }
+
+
+//    public static void writePropertiesUtf8(List<PropertyEntry> entries, String filename) throws IOException {
+//        logger.info("Starting to write {} entries to file: {}", entries.size(), filename);
+//
+//        Path filePath = Paths.get(filename);
+//        if (!Files.exists(filePath.getParent())) {
+//            logger.debug("Creating directory structure for: {}", filePath.getParent());
+//            Files.createDirectories(filePath.getParent());
+//        }
+//
+//        try (BufferedWriter writer = new BufferedWriter(
+//                new OutputStreamWriter(new FileOutputStream(filename), StandardCharsets.UTF_8))) {
+//
+//            int entryCount = 0;
+//            for (PropertyEntry entry : entries) {
+//                entryCount++;
+//                logger.trace("Writing entry {}/{} of type: {}", entryCount, entries.size(), entry.type);
+//
+//                for (String line : entry.lines) {
+//                    writer.write(line);
+//                    writer.newLine();
+//                }
+//            }
+//
+//            logger.info("Successfully wrote {} entries to file: {}", entries.size(), filename);
+//
+//            if (logger.isDebugEnabled()) {
+//                long fileSize = Files.size(filePath);
+//                logger.debug("File statistics - Size: {} bytes, Entries: {}", fileSize, entries.size());
+//            }
+//
+//        } catch (IOException e) {
+//            logger.error("Failed to write properties file: {}. Error: {}", filename, e.getMessage(), e);
+//            throw new IOException("Error writing properties file: " + filename, e);
+//        }
+//    }
 }

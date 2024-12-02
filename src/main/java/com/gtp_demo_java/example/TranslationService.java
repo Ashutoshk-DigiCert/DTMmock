@@ -306,6 +306,22 @@ public class TranslationService {
                 .trim();
     }
 
+//    private String formatTranslatedText(String key, String originalContent, String translatedText) {
+//        String formattedText = translatedText;
+//
+//        if (originalContent.contains("{") && originalContent.contains("}")) {
+//            formattedText = restorePlaceholders(originalContent, formattedText);
+//        }
+//
+//        if (originalContent.contains("${")) {
+//            formattedText = restoreVariables(originalContent, formattedText);
+//        }
+//
+//        return key + formattedText;
+//    }
+
+    // In the TranslationService class, modify the formatTranslatedText method
+
     private String formatTranslatedText(String key, String originalContent, String translatedText) {
         String formattedText = translatedText;
 
@@ -317,8 +333,14 @@ public class TranslationService {
             formattedText = restoreVariables(originalContent, formattedText);
         }
 
+        // Remove any existing line continuations and join multiple lines
+        formattedText = formattedText.replaceAll("\\\\\n\\s*", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
+
         return key + formattedText;
     }
+
 
     private String restorePlaceholders(String original, String translated) {
         String[] translatedParts = translated.split("PLACEHOLDER");
